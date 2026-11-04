@@ -1831,6 +1831,11 @@ const NET = {
     String(t).split(/(https:\/\/\S+)/).forEach((part, i) => { if (i % 2) { const a = document.createElement("a"); a.href = part; a.target = "_blank"; a.rel = "noopener"; a.textContent = part; a.style.color = "var(--volt)"; a.style.wordBreak = "break-all"; e.appendChild(a); } else e.appendChild(document.createTextNode(part)); });
   },
   opts() { return Object.assign({debug: 0}, window.RCB_PEER_OPTS || {}); },
+  // 邀請／觀戰連結的網址：從電腦檔案（file://）或安裝版開的房，改給網站版網址，朋友才打得開
+  shareBase() {
+    const here = location.href.split("#")[0].split("?")[0];
+    return /^https?:/.test(location.protocol) && !/^(localhost|127\.|\[::1\])/.test(location.hostname) && !IN_CLAUDE ? here : SITE_URL;
+  },
   // 連線錯誤翻成中文；不支援點對點的頁面（claude.ai 分享頁、LINE／IG 內建瀏覽器）引導到網站版
   errText(e) {
     const t = e && (e.type || e.message) || "";
@@ -1845,9 +1850,9 @@ const NET = {
     const peer = this.peer = new Peer(this.PREFIX + code, this.opts());
     peer.on("open", () => {
       $("netCode").textContent = code; $("netHostBox").hidden = false;
-      const link = location.href.split("#")[0] + "#join-" + code;
+      const link = NET.shareBase() + "#join-" + code;
       $("netLink").value = link;
-      $("netWatchLink").value = location.href.split("#")[0] + "#watch-" + code;
+      $("netWatchLink").value = NET.shareBase() + "#watch-" + code;
       this.status("房間已建立，把房號或連結傳給朋友，等待加入…");
     });
     peer.on("connection", c => {
@@ -1868,8 +1873,8 @@ const NET = {
       if (!cli || this.code_ !== code) return;
       if ($("netCode").textContent !== code) {            // 點對點伺服器連不上時，也能靠中繼開房
         $("netCode").textContent = code; $("netHostBox").hidden = false;
-        $("netLink").value = location.href.split("#")[0] + "#join-" + code;
-        $("netWatchLink").value = location.href.split("#")[0] + "#watch-" + code;
+        $("netLink").value = NET.shareBase() + "#join-" + code;
+        $("netWatchLink").value = NET.shareBase() + "#watch-" + code;
         this.status("房間已建立，把房號或連結傳給朋友，等待加入…");
       }
       Relay.listen(code, "h", m => {
