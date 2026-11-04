@@ -33,6 +33,7 @@ OUT_SPEED = 517.5                       # 飛出邊框的門檻速度（px/s）�
 RAIL_REST = 0.7                         # 邊框回彈係數
 # 規則：True＝官方說明書 Ver.1.1.2（預設）；False＝isn_ver.1 自訂（攻擊方翻色不淘汰、隊友出界放回）
 OFFICIAL_RULES = True
+SLING_MODE = True                       # 操作模式：True＝彈弓式（後拉放開），False＝點選式（點方向 → 力量條 → 精準度）；對戰中可隨時切換（V 鍵）
 EASY_MODE = False                       # 簡易規則 EASY 1V1：每方 1 枚，彈起沒變色直接 Safe（不比 OX）；開場畫面可切換
 
 
@@ -40,7 +41,7 @@ def team_max():
     return 1 if EASY_MODE else 3
 DUEL_TIME = 2.4                         # 每張 OX 對決畫面顯示秒數
 FLIP_CHANCE = 0.5                       # 彈起翻轉後落地換成對方顏色的機率（正反各 1/2）
-FRICTION = 650.0                        # 滑行減速 px/s²
+FRICTION = 669.5                        # 滑行減速 px/s²（場地摩擦 +3%，原 650）
 COIN_REST = 0.98                        # 金幣互撞回彈係數（撞球約 0.93～0.98）
 # 旋轉（撞球式）：單位 rad/s，金幣當均勻圓盤（轉動慣量 I = ½ m R²）
 SPIN_STEP = 8.75                        # 出手旋轉每段角速度（左右各 3 段）
@@ -58,8 +59,9 @@ TURN_TIME = 18.0                        # 每回合出手限時（秒），超�
 MATCH_TIME = 480.0                      # 全場 8 分鐘：時間到比開場隊伍 M 值合計，少的一方獲勝
 SPIN_PERF = 0.2                         # 每加 1 段旋轉，PERFECT 區縮小 20%（3 段剩 40%）
 VMIN, VMAX = 290.0, 1386.0           # 力量整體＋10%、低力量也推得動（原 160～1260）              # 力量 0%～100% 的初速
-SPOT_HALF = math.radians(13.44)           # リバースポット半角（開關側與對側各一）
-UNLOCK_SPEED = 322.0                    # 翻轉力道：リバースポット受到的撞擊速度 ≥ 此值才會彈起（金幣互撞、撞邊框皆同）
+SPOT_HALF = math.radians(14.112)   # 弱點 ±14.1°（13.44° 再加大 5%）           # リバースポット半角（開關側與對側各一）
+UNLOCK_RAIL = 322.0                     # 弱點撞「邊框」的翻轉門檻（維持不變）
+UNLOCK_SPEED = 296.24                    # 翻轉力道：リバースポット受到的撞擊速度 ≥ 此值才會彈起（金幣互撞、撞邊框皆同）
 ACC_MAX_ERR = math.radians(70)          # 精準度條最邊緣：以發射方向為基準左右各偏 70°
 ACC_CURVE = 400.0                       # 精準度偏差造成的側向弧線加速度
 MISS_MIN = 5 / 70                       # 沒按進 PERFECT 區至少偏 5°
@@ -351,8 +353,9 @@ class Game:
         self.buttons = [
             Button((cx - 160, 360, 320, 60), "雙人對戰（同一台電腦）", lambda: self.start_match(False), size=24),
             Button((cx - 160, 432, 320, 60), "對戰電腦", lambda: self.start_match(True), size=24),
-            Button((cx - 160, 504, 320, 60), "旋轉物理：開（撞球式）" if SPIN_ON else "旋轉物理：關（經典）", self.toggle_spin,
-                   size=22, color=(75, 40, 95) if SPIN_ON else None),
+            Button((cx - 160, 504, 155, 60), "旋轉：開" if SPIN_ON else "旋轉：關", self.toggle_spin,
+                   size=20, color=(75, 40, 95) if SPIN_ON else None),
+            Button((cx + 5, 504, 155, 60), "操作：彈弓式" if SLING_MODE else "操作：點選式", self.toggle_ctrl_title, size=20),
             Button((cx - 160, 576, 320, 60), "規則：簡易 EASY 1V1" if EASY_MODE else "規則：官方 3V3（OX 對決）", self.toggle_easy,
                    size=20, color=(40, 80, 60) if EASY_MODE else None),
             Button((cx - 160, 648, 155, 60), "規則說明", self.goto_rules, size=22),
@@ -385,6 +388,10 @@ class Game:
     def toggle_easy(self):
         global EASY_MODE
         EASY_MODE = not EASY_MODE
+        self.goto_title()
+
+    def toggle_ctrl_title(self):
+        self.toggle_ctrl()
         self.goto_title()
 
     def toggle_spin(self):
@@ -577,6 +584,15 @@ class Game:
         if SPIN_ON:
             self.spin_lvl = max(-3, min(3, getattr(self, "spin_lvl", 0) + d))
 
+    def toggle_ctrl(self):
+        """切換彈弓式／點選式；正在瞄準或跑力量條時退回選金幣，避免卡在一半。"""
+        global SLING_MODE
+        SLING_MODE = not SLING_MODE
+        if hasattr(self, "ctrl_btn"):
+            self.ctrl_btn.label = "操作：彈弓式" if SLING_MODE else "操作：點選式"
+        if getattr(self, "phase", None) in ("aim", "power") and self.cur() and not self.cur().cpu:
+            self.phase, self.pull, self.power = "select", None, 0.0
+
     def toggle_guide(self):
         self.guide = not self.guide
         self.guide_btn.label = "輔助線：開" if self.guide else "輔助線：關"
@@ -591,7 +607,8 @@ class Game:
                                 self.toggle_sound, size=16)
         self.music_btn = Button((PANEL_X + 150, 22, 132, 34), "音樂：開" if self.sfx.music_on else "音樂：關",
                                 self.toggle_music, size=16)
-        self.buttons = [self.guide_btn, self.sound_btn, self.music_btn]
+        self.ctrl_btn = Button((FIELD.right - 272, 14, 132, 34), "操作：彈弓式" if SLING_MODE else "操作：點選式", self.toggle_ctrl, size=16)
+        self.buttons = [self.guide_btn, self.sound_btn, self.music_btn, self.ctrl_btn]
         if SPIN_ON:
             ok = lambda: self.cur() and not self.cur().cpu and self.phase in ("select", "aim", "power")
             self.spin_btns = [Button((0, -100, 96, 30), "◀ 左旋", lambda: self.add_spin(-1), ok, size=15),
@@ -782,7 +799,7 @@ class Game:
                 return
             outward = Vector2(0, 0)
             outward[axis] = -1 if pos < lo else 1
-            if vn >= UNLOCK_SPEED and self.spot_facing(p, outward) and vn > p.spot_speed:
+            if vn >= UNLOCK_RAIL and self.spot_facing(p, outward) and vn > p.spot_speed:
                 p.spot_speed, p.spot_src = vn, "rail"
             p.pos[axis] = lo if pos < lo else hi
             p.vel[axis] = -p.vel[axis] * RAIL_REST
@@ -803,7 +820,7 @@ class Game:
         for p in self.pieces:
             p.vel = Vector2()
             p.spin = 0
-            if p.alive and p.spot_speed >= UNLOCK_SPEED:
+            if p.alive and p.spot_speed >= (UNLOCK_RAIL if p.spot_src == "rail" else UNLOCK_SPEED):   # 金幣互撞門檻較低（−8%）
                 p.unlocked = True
                 p.flipped = random.random() < FLIP_CHANCE      # 彈起後落地：正反面各 1/2
                 how = "撞到邊框" if p.spot_src == "rail" else "被撞到"
@@ -1162,8 +1179,28 @@ class Game:
         if key in (pygame.K_z, pygame.K_x) and ph in ("select", "aim", "power") and SPIN_ON:
             self.spin_lvl = max(-3, min(3, self.spin_lvl + (-1 if key == pygame.K_z else 1)))
             return
+        if key == pygame.K_v:
+            self.toggle_ctrl()
+            return
+        if not SLING_MODE and ph in ("select", "aim"):
+            if click and e.pos[0] < PANEL_X:
+                for p in self.own_alive():
+                    if p.pos.distance_to(e.pos) <= R + 4:
+                        self.selected, self.phase, self.power = p, "aim", 0.0
+                        return
+                if ph == "aim" and self.selected:          # 點在別處＝朝那裡瞄準並開始力量條
+                    d = Vector2(e.pos) - self.selected.pos
+                    if d.length() > 5:
+                        self.aim = math.atan2(d.y, d.x)
+                    self.confirm_aim()
+                return
+            if ph == "aim" and e.type == pygame.MOUSEMOTION and self.selected:
+                d = Vector2(e.pos) - self.selected.pos
+                if d.length() > R * 0.6:
+                    self.aim = math.atan2(d.y, d.x)
+                return
         # 後拉發射：在選金幣／瞄準階段按住滑鼠往反方向拉，放開進入精準度
-        if ph in ("select", "aim") and click and e.pos[0] < PANEL_X:
+        if SLING_MODE and ph in ("select", "aim") and click and e.pos[0] < PANEL_X:
             for p in self.own_alive():
                 if p.pos.distance_to(e.pos) <= R + 4 and p is not self.selected:
                     self.selected = p
@@ -1206,6 +1243,8 @@ class Game:
                 self.power = min(1.0, self.power + 0.05)
             elif key == pygame.K_DOWN:
                 self.power = max(0.0, self.power - 0.05)
+            elif key in (pygame.K_SPACE, pygame.K_RETURN) and not SLING_MODE:
+                self.confirm_aim()
             elif key in (pygame.K_SPACE, pygame.K_RETURN) and self.power >= PULL_MIN:
                 self.lock_power()
         elif ph == "power" and go:
@@ -1827,9 +1866,9 @@ class Game:
             text(s, "關（經典玩法，開場畫面可切換）", (x + 50, y + 1), 16, COL["dim"])
         y += 32
         hint = {
-            "select": "① 點自己的金幣，按住往後拉",
-            "aim": "② 往反方向拉（越長越大力），放開發射｜↑↓←→",
-            "power": "③ 放開發射",
+            "select": "① 點自己的金幣，按住往後拉" if SLING_MODE else "① 點自己的金幣（點選式）",
+            "aim": "② 往反方向拉（越長越大力），放開發射｜↑↓←→" if SLING_MODE else "② 移動滑鼠對準，點一下開始力量條｜←→",
+            "power": "③ 放開發射" if SLING_MODE else "③ 力量條：點一下決定力量",
             "accuracy": "④ 精準度：停在中間綠區＝PERFECT",
             "moving": "金幣滑行中…",
             "jump": "彈起翻轉判定中…",
@@ -1844,7 +1883,7 @@ class Game:
 
 
 def main():
-    assert OUT_SPEED > UNLOCK_SPEED, "出界門檻必須大於翻轉門檻"
+    assert OUT_SPEED > max(UNLOCK_SPEED, UNLOCK_RAIL), "出界門檻必須大於翻轉門檻"
     Game().run()
 
 
