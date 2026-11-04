@@ -1,6 +1,6 @@
 """逆轉金幣 桌面對戰（pygame 2D 俯視）
 
-規則：官方取扱説明書 Ver.1.1.2 エキスパートルール（デッキ 1～3 枚・OX 合計 ≤ 15,000，メタ幣以 M 值計）
+規則：官方取扱説明書 Ver.1.1.2 エキスパートルール（デッキ 3 枚・OX 合計 ≤ 15,000，メタ幣以 M 值計）
 擊球：選硬幣 → 確定 → 方向 → 力量條 → 精準度條
 
 執行：python -m pip install pygame-ce   然後   python reverse_coin.py
@@ -29,10 +29,13 @@ START_X = (0.1816, 0.4983, 0.8150)
 START_Y = {"top": 0.1240, "bottom": 0.8725}
 # 撞球檯式邊框：碰到邊框時，垂直於邊框的速度 ≥ OUT_SPEED 才會飛出場外，否則回彈
 RAIL = 16                               # 邊框厚度（px）
-OUT_SPEED = 517.5                       # 飛出邊框的門檻速度（px/s），一定要大於翻轉門檻 UNLOCK_SPEED
+OUT_SPEED = 672.75                       # 飛出邊框的門檻速度（px/s），一定要大於翻轉門檻 UNLOCK_SPEED
 RAIL_REST = 0.7                         # 邊框回彈係數
 # 規則：True＝官方說明書 Ver.1.1.2（預設）；False＝isn_ver.1 自訂（攻擊方翻色不淘汰、隊友出界放回）
 OFFICIAL_RULES = True
+CPU_LEVEL = "normal"                    # 電腦強度：easy 簡單／normal 普通／hard 強者／god 硬幣之神
+CPU_NAME = {"easy": "簡單", "normal": "普通", "hard": "強者", "god": "硬幣之神"}
+CPU_CFG = {"easy": (0.14, 0.55, 0.3), "normal": (0.05, 0.22, 1.0), "hard": (0.025, 0.07, 1.0), "god": (0.02, 0.05, 1.0)}   # 力量誤差、精準度誤差、瞄弱點
 SLING_MODE = True                       # 操作模式：True＝彈弓式（後拉放開），False＝點選式（點方向 → 力量條 → 精準度）；對戰中可隨時切換（V 鍵）
 EASY_MODE = False                       # 簡易規則 EASY 1V1：每方 1 枚，彈起沒變色直接 Safe（不比 OX）；開場畫面可切換
 
@@ -352,7 +355,9 @@ class Game:
         cx = SW // 2
         self.buttons = [
             Button((cx - 160, 360, 320, 60), "雙人對戰（同一台電腦）", lambda: self.start_match(False), size=24),
-            Button((cx - 160, 432, 320, 60), "對戰電腦", lambda: self.start_match(True), size=24),
+            Button((cx - 160, 432, 196, 60), "對戰電腦", lambda: self.start_match(True), size=24),
+            Button((cx + 44, 432, 116, 60), "強度：" + CPU_NAME[CPU_LEVEL], self.cycle_cpu, size=17,
+                   color=(110, 40, 40) if CPU_LEVEL == "god" else None),
             Button((cx - 160, 504, 155, 60), "旋轉：開" if SPIN_ON else "旋轉：關", self.toggle_spin,
                    size=20, color=(75, 40, 95) if SPIN_ON else None),
             Button((cx + 5, 504, 155, 60), "操作：彈弓式" if SLING_MODE else "操作：點選式", self.toggle_ctrl_title, size=20),
@@ -390,6 +395,12 @@ class Game:
         EASY_MODE = not EASY_MODE
         self.goto_title()
 
+    def cycle_cpu(self):
+        global CPU_LEVEL
+        order = ["easy", "normal", "hard", "god"]
+        CPU_LEVEL = order[(order.index(CPU_LEVEL) + 1) % 4]
+        self.goto_title()
+
     def toggle_ctrl_title(self):
         self.toggle_ctrl()
         self.goto_title()
@@ -420,7 +431,7 @@ class Game:
                                     lambda: self.rule_page < n - 1)]
 
     def start_match(self, vs_cpu):
-        self.players = [Player("玩家 1"), Player("電腦" if vs_cpu else "玩家 2", cpu=vs_cpu)]
+        self.players = [Player("玩家 1"), Player(f"電腦（{CPU_NAME[CPU_LEVEL]}）" if vs_cpu else "玩家 2", cpu=vs_cpu)]
         self.goto_build(0)                      # 官方：先決定デッキ，再決定サイドと先攻後攻
 
     def goto_rps(self):
@@ -543,7 +554,7 @@ class Game:
         return sum(BY_ID[i].cost for i in self.sel)
 
     def build_ok(self):
-        return 1 <= len(self.sel) <= team_max() and len(set(self.sel)) == len(self.sel) and self.build_cost() <= BUDGET
+        return len(self.sel) == team_max() and len(set(self.sel)) == len(self.sel) and self.build_cost() <= BUDGET   # 一定要選滿
 
     def confirm_build(self):
         self.players[self.build_idx].team_ids = list(self.sel)
@@ -699,6 +710,11 @@ class Game:
         s.spin = (lvl * SPIN_STEP + err * ACC_SPIN) if SPIN_ON else 0.0            # 出手旋轉（塞球）＋沒按準的額外旋轉
         self.shooter = s
         self.shooter_hit = False
+        plan = getattr(self, "cpu_plan", None)
+        self.god_shot = (plan["god"], s.team) if (self.cur().cpu and plan and plan.get("god")) else None
+        if self.god_shot:
+            s.spin = 0.0
+            self.curve = 0.0
         for p in self.pieces:
             p.prev_pos = Vector2(p.pos)
         self.phase = "moving"
@@ -793,7 +809,8 @@ class Game:
             if vn <= 0:
                 continue
             self.sfx.play("rail_hit", vn / 500)
-            if vn >= OUT_SPEED:
+            gs = getattr(self, "god_shot", None)
+            if vn >= OUT_SPEED and not (gs and p.team == gs[1]):            # 神之一擊：自己不出界
                 p.out = True
                 p.vel *= 0.55          # 飛越邊框損失速度
                 return
@@ -817,6 +834,19 @@ class Game:
 
     # ------------------------------------------------------------ 判定
     def start_resolve(self):
+        gs = getattr(self, "god_shot", None)
+        if gs:
+            self.god_shot = None
+            target, team = gs
+            for p in self.pieces:
+                if p.team == team:
+                    p.spot_speed, p.spot_src = 0.0, ""                         # 自己不翻面
+            if not target.alive:
+                target = next((p for p in self.pieces if p.alive and p.team != team), None)
+            if target:
+                target.spot_speed, target.spot_src, target.touched = max(target.spot_speed, UNLOCK_SPEED * 1.3), "coin", True
+                self.shooter_hit = True
+                self.add_log(f"⚡ 硬幣之神・神之一擊！命中 {target.coin.jp} 的リバースポット")
         for p in self.pieces:
             p.vel = Vector2()
             p.spin = 0
@@ -1041,18 +1071,21 @@ class Game:
                     dist = s.pos.distance_to(c)
                     if dist < 1:
                         continue
-                    score = -dist * 0.01 + (6 if spot else 0) + (3 if s.value > t.value else 0)
+                    pw_e, acc_e, spot_w = CPU_CFG[CPU_LEVEL]
+                    score = -dist * 0.01 + (6 * spot_w if spot else 0) + (3 if s.value > t.value else 0) + (random.random() * 8 if CPU_LEVEL == "easy" else 0)
                     if best is None or score > best[0]:
-                        best = (score, s, c, dist)
+                        best = (score, s, c, dist, t)
         if best is None:
             return
-        _, s, c, dist = best
+        _, s, c, dist, tgt = best
+        pw_e, acc_e, _w = CPU_CFG[CPU_LEVEL]
+        god = CPU_LEVEL == "god" and random.random() < 0.9            # 硬幣之神：90% 神之一擊
         need = math.sqrt(430 ** 2 + 2 * FRICTION * dist)
         power = max(0.05, min(1.0, (need - VMIN) / (VMAX - VMIN)))
         d = c - s.pos
         self.cpu_plan = dict(piece=s, aim=math.atan2(d.y, d.x),
-                             power=max(0.0, min(1.0, power + random.gauss(0, 0.05))),
-                             acc=max(-1.0, min(1.0, random.gauss(0, 0.22))))
+                             power=max(0.0, min(1.0, power + (0.12 if god else random.gauss(0, pw_e)))),
+                             acc=0.0 if god else max(-1.0, min(1.0, random.gauss(0, acc_e))), god=tgt if god else None)
         self.selected = s
 
     def cpu_update(self, dt):
@@ -1353,7 +1386,7 @@ class Game:
             return
         text(s, "規則說明（官方取扱説明書 Ver.1.1.2）", (60, 40), 40, COL["yel"], bold=True)
         lines = [
-            "【賽前】先組隊：1～3 枚、同一隊不可重複，OX 合計 ≤ 15,000（メタ幣算 M 值）。再猜拳選陣營、擲金幣定先攻。",
+            "【賽前】先組隊：一定要 3 枚、同一隊不可重複，OX 合計 ≤ 15,000（メタ幣算 M 值）。再猜拳選陣營、擲金幣定先攻。",
             "【擊球】① 選金幣確定　② 滑鼠／←→ 決定方向（H 開關輔助線，關閉時用大三角箭頭）　③ 力量條　④ 精準度條",
             "　　　　精準度：中間綠區＝PERFECT 不偏；一離開就至少偏 5°，越靠邊越大，最邊緣左右各偏 70° 並帶弧線。",
             "【旋轉】出手前 Z 左旋／X 右旋（各 3 段）：金幣會轉、走弧線，撞到對手會傳遞旋轉並帶偏，撞邊框反彈角度改變；越強 PERFECT 綠區越窄。",
@@ -1390,7 +1423,7 @@ class Game:
     def draw_build(self):
         s = self.screen
         pl = self.players[self.build_idx]
-        text(s, f"{pl.name} 組隊｜1～3 枚、不可重複，OX 合計 ≤ 15,000（メタ幣算 M 值；陣營之後猜拳決定）", (40, 24), 26, COL["yel"],
+        text(s, f"{pl.name} 組隊｜一定要選 3 枚、不可重複，OX 合計 ≤ 15,000（メタ幣算 M 值；陣營之後猜拳決定）", (40, 24), 26, COL["yel"],
              bold=True)
         # 搜尋框
         box = pygame.Rect(40, 122, 300, 34)
