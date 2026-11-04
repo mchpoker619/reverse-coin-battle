@@ -8,10 +8,10 @@ def coin(x, y, r=17, camp='O', label='', tab=0, spot=False, ring=None):
     if spot:
         import math
         for base in (tab, tab + 180):
-            a0, a1 = math.radians(base - 32), math.radians(base + 32)
+            a0, a1 = math.radians(base - 13.44), math.radians(base + 13.44)
             rr = r + 6
             x0, y0, x1, y1 = x + rr * math.cos(a0), y + rr * math.sin(a0), x + rr * math.cos(a1), y + rr * math.sin(a1)
-            out.append(f'<path d="M{x0:.1f} {y0:.1f} A{rr} {rr} 0 0 1 {x1:.1f} {y1:.1f}" stroke="{V}" stroke-width="5" fill="none" stroke-linecap="round"/>')
+            out.append(f'<path d="M{x0:.1f} {y0:.1f} A{rr} {rr} 0 0 1 {x1:.1f} {y1:.1f}" stroke="{RD}" stroke-width="6" fill="none" stroke-linecap="round"/>')
     if ring:
         out.append(f'<circle cx="{x}" cy="{y}" r="{r + 5}" fill="none" stroke="{ring}" stroke-width="3"/>')
     import math
@@ -88,7 +88,7 @@ card('⑤ 旋轉（可在開場關閉）',
 # 6 弱點
 card('⑥ リバースポット（弱點）',
      coin(120, 75, 30, 'O', '', 0, spot=True) + arrow(208, 75, 160, 75, CY, 4) + text(200, 60, '打這裡', CY, 12)
-     + text(40, 42, '開關側', V, 12) + text(40, 112, '和正對面', V, 12) + text(40, 128, '各 ±32°', DIM, 11),
+     + text(40, 42, '開關側', RD, 12) + text(40, 112, '和正對面', RD, 12) + text(40, 128, '各 ±13°', DIM, 11),
      '開關（小突起）那一側和正對面是弱點。用力打中 → 金幣彈起翻面；打其他地方再大力也不會翻。')
 # 7 翻面判定
 card('⑦ 彈起後：顏色決定',
@@ -113,7 +113,7 @@ card('⑩ 撞邊框：三種情形',
      f'<rect x="196" y="12" width="14" height="128" rx="3" fill="#6b4a2e"/>'
      + coin(46, 30, 12, 'X') + arrow(60, 30, 228, 30, RD, 4) + text(116, 22, '很快 → 飛出界', RD, 11)
      + coin(46, 76, 12, 'X') + arrow(60, 76, 190, 76, OR, 3, head=False) + arrow(190, 76, 120, 96, OR, 3) + text(110, 70, '不夠快 → 減速反彈', OR, 11)
-     + coin(178, 124, 12, 'X', '', 0, spot=True) + text(98, 128, '弱點撞牆夠力 → 翻面', V, 11),
+     + coin(178, 124, 12, 'X', '', 0, spot=True) + text(98, 128, '弱點撞牆夠力 → 翻面', RD, 11),
      '垂直撞擊夠快飛出場外；不夠快就反彈；如果是自己的弱點撞牆且夠力，也會彈起翻面。')
 # 11 出界與放回場
 card('⑪ 防守方被撞出界',

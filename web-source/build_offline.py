@@ -25,7 +25,8 @@ for f in sorted(os.listdir(COINS)):
         im = Image.open(os.path.join(COINS, f)).convert('RGBA')
         coins[f[:-4]] = data_uri(im, 'WEBP', 'image/webp', quality=88, method=6)
 field = data_uri(Image.open(FIELD).convert('RGB'), 'JPEG', 'image/jpeg', quality=92)
-assets_js = 'window.RCB_ASSETS=' + json.dumps({'field': field, 'coins': coins}, separators=(',', ':')) + ';'
+TITLE_BG = 'data:image/jpeg;base64,' + base64.b64encode(open(os.path.join(HERE, 'title_bg.jpg'), 'rb').read()).decode()
+assets_js = 'window.RCB_ASSETS=' + json.dumps({'field': field, 'coins': coins}, separators=(',', ':')) + ';window.RCB_TITLE_BG=' + json.dumps(TITLE_BG) + ';'
 # 音效：單機版內嵌；電腦版改讀旁邊的 sounds 資料夾（可自行替換）
 SOUNDS = os.path.join(HERE, 'sounds')
 MIME = {'.wav': 'audio/wav', '.ogg': 'audio/ogg', '.mp3': 'audio/mpeg'}

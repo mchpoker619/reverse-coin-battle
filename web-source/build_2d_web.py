@@ -36,8 +36,9 @@ for f in sorted(os.listdir(os.path.join(HERE, 'sounds'))):
     n, e = os.path.splitext(f)
     if e in MIME:
         snd[n] = f'data:{MIME[e]};base64,' + base64.b64encode(open(os.path.join(HERE, 'sounds', f), 'rb').read()).decode()
+TITLE_BG = 'data:image/jpeg;base64,' + base64.b64encode(open(os.path.join(HERE, 'title_bg.jpg'), 'rb').read()).decode()
 inject = ('<script>window.RCB_ASSETS=' + json.dumps({'field': field, 'coins': coins}, separators=(',', ':')) + ';'
-          'window.RCB_SOUNDS=' + json.dumps(snd, separators=(',', ':')) + ';</script>\n')
+          'window.RCB_SOUNDS=' + json.dumps(snd, separators=(',', ':')) + ';window.RCB_TITLE_BG=' + json.dumps(TITLE_BG) + ';</script>\n')
 k = src.index('<script>')
 src = src[:k] + inject + src[k:]
 web = src.replace("padding-left: max(8px, env(safe-area-inset-left, 0px));", "padding-left: max(16px, env(safe-area-inset-left, 0px));") \

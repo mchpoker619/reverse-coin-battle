@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>逆轉金幣 對戰</title>
+<meta name="description" content="逆轉金幣（逆転バリバリバース）線上對戰：3D／2D，雙人、對戰電腦、兩支手機連線。測試版推廣版本 請勿銷售利用｜遊戲版權歸 BANDAI 萬代所有">
+<style>
+:root { --ink:#13111b; --panel:#1f1c2b; --line:#3a3550; --text:#ece9f5; --dim:#a39fb8; --volt:#e4ff3a; --warn:#ff6b7d; color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--ink); color: var(--text); font-family: "Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;
+  display: grid; place-items: center; padding: 24px max(16px, env(safe-area-inset-left, 0px)) 24px max(16px, env(safe-area-inset-right, 0px)); }
+main { width: min(100%, 620px); display: grid; gap: 18px; text-align: center; }
+h1 { margin: 0; font-size: clamp(44px, 12vw, 84px); color: var(--volt); letter-spacing: .04em; line-height: 1; }
+.sub { margin: 0; color: var(--dim); }
+.warn { margin: 0; color: var(--warn); font-weight: 900; }
+.pick { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+a.card { display: grid; gap: 6px; padding: 22px 16px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line);
+  color: var(--text); text-decoration: none; }
+a.card:hover, a.card:focus-visible { border-color: var(--volt); outline: none; }
+a.card b { font-size: 28px; color: var(--volt); }
+a.card span { color: var(--dim); font-size: 14px; }
+.how { text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 18px; color: var(--dim); font-size: 14px; line-height: 1.7; }
+.how b { color: var(--text); }
+@media (max-width: 460px) { .pick { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>逆轉金幣</h1>
+  <p class="sub">逆転バリバリバース 對戰｜官方取扱説明書 Ver.1.1.2 規則・全 101 枚金幣</p>
+  <p class="warn">測試版推廣版本 請勿銷售利用｜遊戲版權歸 BANDAI 萬代所有</p>
+  <div class="pick">
+    <a class="card" href="3d/"><b>3D 版</b><span>立體球檯、可轉鏡頭</span></a>
+    <a class="card" href="2d/"><b>2D 版</b><span>俯視畫面、手機更順</span></a>
+  </div>
+  <div class="how">
+    <b>兩支手機線上對戰：</b>進入遊戲 → 按「線上對戰」→ 一人按「建立房間」，把房號或「複製連結」傳給朋友 → 朋友輸入房號或點連結加入。兩邊要選同一個版本（3D 或 2D）。
+  </div>
+</main>
+</body>
+</html>

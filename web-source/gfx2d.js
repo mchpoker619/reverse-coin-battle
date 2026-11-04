@@ -15,14 +15,17 @@ const GFX = (() => {
     cw = stage.clientWidth; ch = stage.clientHeight;
     cv.width = Math.max(1, cw * dpr); cv.height = Math.max(1, ch * dpr);
     const m = 14, top = 54, bot = 40;                       // 上方留給工具列、下方留給提示
-    k = Math.min((cw - 2 * m) / (W + 2 * RAIL_T), (ch - top - bot) / (H + 2 * RAIL_T));
+    const vb = document.getElementById("vbars"), res = vb ? vb.offsetWidth + 12 : 0;   // 右側直式跑條
+    k = Math.min((cw - 2 * Math.max(m, res)) / (W + 2 * RAIL_T), (ch - top - bot) / (H + 2 * RAIL_T));
     ox = cw / 2; oy = top + (ch - top - bot) / 2;
   }
   window.addEventListener("resize", resize);
   const sx = x => ox + x * k, sy = z => oy + z * k;
 
   // 輸入
+  const screenPt = {x: 0, y: 0};
   function pick(ev) {
+    screenPt.x = ev.clientX; screenPt.y = ev.clientY;
     const r = cv.getBoundingClientRect();
     mouse.x = (ev.clientX - r.left - ox) / k; mouse.z = (ev.clientY - r.top - oy) / k; mouse.ok = true;
     return mouse;
@@ -126,11 +129,13 @@ const GFX = (() => {
     const s = G.selected;
 
     // 弱點（對手）
-    if (aiming) for (const p of G.pieces) {
-      if (!p.alive || p.out || p.team === G.turn) continue;
+    const ori = ph === "orient" ? (G.orientQueue || [])[0] : null;
+    if (ori) ring(ori.x, ori.z, R + 0.55, "#e4ff3a", 0.4 * k);
+    if (aiming || ori || (G.tut && G.tut.k > 0 && ph === "select")) for (const p of G.pieces) {   // 教學第 2、3 課：選球時也顯示弱點
+      if (ori ? p !== ori : (!p.alive || p.out || p.team === G.turn)) continue;
       for (const a0 of [p.angle, p.angle + Math.PI]) {
-        ctx.strokeStyle = "#000"; ctx.lineWidth = 0.55 * k; ctx.beginPath(); ctx.arc(sx(p.x), sy(p.z), (R + 0.42) * k, a0 - P.SPOT, a0 + P.SPOT); ctx.stroke();
-        ctx.strokeStyle = "#e4ff3a"; ctx.lineWidth = 0.32 * k; ctx.beginPath(); ctx.arc(sx(p.x), sy(p.z), (R + 0.42) * k, a0 - P.SPOT, a0 + P.SPOT); ctx.stroke();
+        ctx.strokeStyle = "#fff"; ctx.lineWidth = 0.65 * k; ctx.beginPath(); ctx.arc(sx(p.x), sy(p.z), (R + 0.42) * k, a0 - P.SPOT, a0 + P.SPOT); ctx.stroke();
+        ctx.strokeStyle = "#ff2a2a"; ctx.lineWidth = 0.4 * k; ctx.beginPath(); ctx.arc(sx(p.x), sy(p.z), (R + 0.42) * k, a0 - P.SPOT, a0 + P.SPOT); ctx.stroke();
       }
     }
 
@@ -236,5 +241,5 @@ const GFX = (() => {
   }
   resize();
   function toScreen(x, z) { const r = cv.getBoundingClientRect(); return [r.left + sx(x), r.top + sy(z)]; }
-  return {render, buildPieces, refreshTextures, followTurn, setMode, resize, clack, cam, mouse, toScreen};
+  return {render, buildPieces, refreshTextures, followTurn, setMode, resize, clack, cam, mouse, toScreen, screen: screenPt};
 })();

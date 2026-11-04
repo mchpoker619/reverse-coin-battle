@@ -29,31 +29,37 @@ START_X = (0.1816, 0.4983, 0.8150)
 START_Y = {"top": 0.1240, "bottom": 0.8725}
 # 撞球檯式邊框：碰到邊框時，垂直於邊框的速度 ≥ OUT_SPEED 才會飛出場外，否則回彈
 RAIL = 16                               # 邊框厚度（px）
-OUT_SPEED = 450.0                       # 飛出邊框的門檻速度（px/s），一定要大於翻轉門檻 UNLOCK_SPEED
+OUT_SPEED = 517.5                       # 飛出邊框的門檻速度（px/s），一定要大於翻轉門檻 UNLOCK_SPEED
 RAIL_REST = 0.7                         # 邊框回彈係數
 # 規則：True＝官方說明書 Ver.1.1.2（預設）；False＝isn_ver.1 自訂（攻擊方翻色不淘汰、隊友出界放回）
 OFFICIAL_RULES = True
+EASY_MODE = False                       # 簡易規則 EASY 1V1：每方 1 枚，彈起沒變色直接 Safe（不比 OX）；開場畫面可切換
+
+
+def team_max():
+    return 1 if EASY_MODE else 3
 DUEL_TIME = 2.4                         # 每張 OX 對決畫面顯示秒數
 FLIP_CHANCE = 0.5                       # 彈起翻轉後落地換成對方顏色的機率（正反各 1/2）
 FRICTION = 650.0                        # 滑行減速 px/s²
-COIN_REST = 0.95                        # 金幣互撞回彈係數（撞球約 0.93～0.98）
+COIN_REST = 0.98                        # 金幣互撞回彈係數（撞球約 0.93～0.98）
 # 旋轉（撞球式）：單位 rad/s，金幣當均勻圓盤（轉動慣量 I = ½ m R²）
 SPIN_STEP = 8.75                        # 出手旋轉每段角速度（左右各 3 段）
 SPIN_DECEL = 12.0                       # 桌面摩擦讓旋轉減速（rad/s²）
-COIN_MU = 0.25                          # 金幣互撞接觸摩擦：傳遞旋轉、把對手帶偏（齒輪效果）
+SHOOTER_MASS = 1.3                      # 出手中的攻擊金幣有「跟進力」：撞到對手後自己不會幾乎停住、對手也被推得更遠
+COIN_MU = 0.12                          # 金幣互撞接觸摩擦：傳遞旋轉、把對手帶偏（齒輪效果）
 RAIL_MU = 0.25                          # 邊框摩擦：帶旋轉撞牆改變反彈角度（塞球）
 CURL_K = 0.0495                         # 旋轉中滑行的側向弧線（冰壺效果）
 ACC_SPIN = 6.0                          # 精準度沒按準時額外帶出的旋轉
 SPIN_ON = True                          # 旋轉物理開關（開場畫面可切換）
 WATERMARK = "測試版推廣版本 請勿銷售利用｜遊戲版權歸 BANDAI 萬代所有"
-PULL_MAX = 200.0                        # 後拉發射：拉 200 px（約 12 cm）＝ 100% 力量（上限）
+PULL_MAX = 160.0                        # 後拉發射：在畫面上拉 160 px＝100% 力量；從任何位置按下都能拉滿
 PULL_MIN = 0.04                         # 拉不到 4% 視為取消
 TURN_TIME = 18.0                        # 每回合出手限時（秒），超過＝放棄這回合
 MATCH_TIME = 480.0                      # 全場 8 分鐘：時間到比開場隊伍 M 值合計，少的一方獲勝
 SPIN_PERF = 0.2                         # 每加 1 段旋轉，PERFECT 區縮小 20%（3 段剩 40%）
-VMIN, VMAX = 160.0, 1260.0           # 力量上限＋20%（原 1050）              # 力量 0%～100% 的初速
-SPOT_HALF = math.radians(32)            # リバースポット半角（開關側與對側各一）
-UNLOCK_SPEED = 280.0                    # 翻轉力道：リバースポット受到的撞擊速度 ≥ 此值才會彈起（金幣互撞、撞邊框皆同）
+VMIN, VMAX = 290.0, 1386.0           # 力量整體＋10%、低力量也推得動（原 160～1260）              # 力量 0%～100% 的初速
+SPOT_HALF = math.radians(13.44)           # リバースポット半角（開關側與對側各一）
+UNLOCK_SPEED = 322.0                    # 翻轉力道：リバースポット受到的撞擊速度 ≥ 此值才會彈起（金幣互撞、撞邊框皆同）
 ACC_MAX_ERR = math.radians(70)          # 精準度條最邊緣：以發射方向為基準左右各偏 70°
 ACC_CURVE = 400.0                       # 精準度偏差造成的側向弧線加速度
 MISS_MIN = 5 / 70                       # 沒按進 PERFECT 區至少偏 5°
@@ -347,8 +353,10 @@ class Game:
             Button((cx - 160, 432, 320, 60), "對戰電腦", lambda: self.start_match(True), size=24),
             Button((cx - 160, 504, 320, 60), "旋轉物理：開（撞球式）" if SPIN_ON else "旋轉物理：關（經典）", self.toggle_spin,
                    size=22, color=(75, 40, 95) if SPIN_ON else None),
-            Button((cx - 160, 576, 320, 60), "規則說明", self.goto_rules, size=24),
-            Button((cx - 160, 648, 320, 60), "離開", self.quit, size=24),
+            Button((cx - 160, 576, 320, 60), "規則：簡易 EASY 1V1" if EASY_MODE else "規則：官方 3V3（OX 對決）", self.toggle_easy,
+                   size=20, color=(40, 80, 60) if EASY_MODE else None),
+            Button((cx - 160, 648, 155, 60), "規則說明", self.goto_rules, size=22),
+            Button((cx + 5, 648, 155, 60), "離開", self.quit, size=22),
         ]
         for b in self.buttons:                       # 主選單按鈕半透明
             b.alpha = 215
@@ -359,10 +367,12 @@ class Game:
             bg = pygame.Surface((SW, SH))
             bg.fill(COL["bg"])
             try:
-                img = pygame.image.load(os.path.join(os.path.dirname(os.path.abspath(__file__)), "field.jpg")).convert()
+                here = os.path.dirname(os.path.abspath(__file__))
+                f = os.path.join(here, "title_bg.jpg")             # 主選單底圖（可自行替換）
+                img = pygame.image.load(f if os.path.exists(f) else os.path.join(here, "field.jpg")).convert()
                 sc = max(SW / img.get_width(), SH / img.get_height())
                 img = pygame.transform.smoothscale(img, (int(img.get_width() * sc), int(img.get_height() * sc)))
-                bg.blit(img, ((SW - img.get_width()) // 2, (SH - img.get_height()) // 2))
+                bg.blit(img, ((SW - img.get_width()) // 2, 0))           # 靠上對齊，保留標題
             except Exception:
                 pass
             shade = pygame.Surface((SW, SH), pygame.SRCALPHA)
@@ -371,6 +381,11 @@ class Game:
             bg.blit(shade, (0, 0))
             self._title_bg = bg
         return self._title_bg
+
+    def toggle_easy(self):
+        global EASY_MODE
+        EASY_MODE = not EASY_MODE
+        self.goto_title()
 
     def toggle_spin(self):
         global SPIN_ON
@@ -431,12 +446,13 @@ class Game:
     def goto_build(self, idx):
         p = self.players[idx]
         if p.cpu:
-            p.team_ids = list(PRESETS[0][1])    # 電腦還不知道陣營 → 帶非メタ的平衡隊
+            p.team_ids = list(PRESETS[0][1])[:team_max()]    # 電腦還不知道陣營 → 帶非メタ的平衡隊
             if idx == 0:
                 return self.goto_build(1)
             return self.goto_rps()
         self.scene = "build"
         self.build_idx = idx
+        self.peek = None
         self.sel = list(p.team_ids)
         self.flt_side, self.flt_rar, self.sort_mode, self.scroll = "全部", "全部", "戰力", 0
         self.q, self.q_active, self.min_s, self.max_s, self.fit_only = "", False, 0, 0, False   # 搜尋／分數過濾（0＝不限）
@@ -514,13 +530,13 @@ class Game:
         self.scroll = 0
 
     def apply_preset(self, ids):
-        self.sel = list(ids)
+        self.sel = list(ids)[:team_max()]
 
     def build_cost(self):
         return sum(BY_ID[i].cost for i in self.sel)
 
     def build_ok(self):
-        return 1 <= len(self.sel) <= 3 and len(set(self.sel)) == len(self.sel) and self.build_cost() <= BUDGET
+        return 1 <= len(self.sel) <= team_max() and len(set(self.sel)) == len(self.sel) and self.build_cost() <= BUDGET
 
     def confirm_build(self):
         self.players[self.build_idx].team_ids = list(self.sel)
@@ -716,18 +732,20 @@ class Game:
         rel = (a.vel - b.vel).dot(n)
         if rel <= 0:
             return
-        jn = rel * (1 + COIN_REST) / 2               # 法向衝量（等質量）
+        ma = SHOOTER_MASS if a is self.shooter else 1.0
+        mb = SHOOTER_MASS if b is self.shooter else 1.0
+        jn = rel * (1 + COIN_REST) / (1 / ma + 1 / mb)   # 法向衝量（攻擊金幣較重）
         self.sfx.play("coin_hit", rel / 700)
-        a.vel -= n * jn
-        b.vel += n * jn
+        a.vel -= n * (jn / ma)
+        b.vel += n * (jn / mb)
         # 接觸點切向相對速度＝平移差＋兩枚旋轉（ω×R）；摩擦衝量受 COIN_MU·法向衝量限制
         t = Vector2(-n.y, n.x)
         vt = (a.vel - b.vel).dot(t) + R * (a.spin + b.spin)
-        jt = max(-COIN_MU * jn, min(COIN_MU * jn, -vt / 6))   # 有效質量 1+1+2+2 = 6
-        a.vel += t * jt
-        b.vel -= t * jt
-        a.spin += 2 * jt / R                         # 齒輪效果：兩枚往相反方向轉
-        b.spin += 2 * jt / R
+        jt = max(-COIN_MU * jn, min(COIN_MU * jn, -vt / (3 / ma + 3 / mb)))   # 有效質量（等質量時＝6）
+        a.vel += t * (jt / ma)
+        b.vel -= t * (jt / mb)
+        a.spin += 2 * jt / (ma * R)                  # 齒輪效果：兩枚往相反方向轉
+        b.spin += 2 * jt / (mb * R)
         if not SPIN_ON:
             a.spin = b.spin = 0.0
         self.record_hit(a, n, rel)
@@ -836,6 +854,10 @@ class Game:
                 elif p.flipped:
                     self.eliminate(p, "翻成對方顏色 → 淘汰")
                     self.events.append(("flip", S, p, False))
+                elif EASY_MODE:
+                    self.add_log(f"存活｜{p.coin.jp} 彈起但沒變色 → 簡易規則直接 Safe")
+                    if p.out:
+                        self.place_queue.append(p)
                 else:
                     v = p.ox_after_pop
                     meta = f"（メタ幣核心翻面：{p.value}→{v}）" if p.coin.meta else ""
@@ -849,9 +871,8 @@ class Game:
                     else:
                         self.eliminate(p, f"仍是自己顏色，OX {v} < {S.value} → 淘汰{meta}")
                         self.events.append(("duel", S, p, False))
-        for p in self.pieces:
-            if p.alive and not p.out:
-                p.angle = p.home_angle if p.unlocked else p.angle
+        # 場內 Safe（彈起後存活、留在場內）→ 原地重新鎖定，弱點方向由攻擊方決定（判定助手 v3）
+        self.orient_queue = [p for p in self.pieces if p.alive and not p.out and p.unlocked]
         # 彈起但セーフ：留在停下的位置，原地重新鎖定（判定助手 D6／A4）
         for p in self.pieces:
             p.return_home = False
@@ -863,6 +884,10 @@ class Game:
 
     def after_results(self):
         if self.check_win():
+            return
+        self.orient_queue = [p for p in getattr(self, "orient_queue", []) if p.alive and not p.out]
+        if self.orient_queue:
+            self.phase, self.cpu_timer, self.turn_t = "orient", 0.7, TURN_TIME
             return
         if self.place_queue:
             self.phase = "place"
@@ -898,6 +923,17 @@ class Game:
             if q is not piece and q.pos.distance_to(pos) < 4 * R:
                 return False
         return True
+
+    def orient_confirm(self, angle):
+        p = self.orient_queue.pop(0)
+        p.angle = angle
+        self.add_log(f"{p.coin.jp} 原地重新鎖定（方向由攻擊方決定）")
+        if self.orient_queue:
+            return
+        if self.place_queue:
+            self.phase, self.cpu_timer, self.turn_t = "place", 0.6, TURN_TIME
+        else:
+            self.end_turn()
 
     def place(self, pos):
         p = self.place_queue[0]
@@ -938,6 +974,10 @@ class Game:
 
     def time_up(self):
         """出手限時到：放回場階段自動放置；其他階段＝放棄這回合。"""
+        if self.phase == "orient":
+            while self.phase == "orient" and self.orient_queue:
+                self.orient_confirm(self.orient_queue[0].angle)
+            return
         if self.phase == "place":
             p = self.place_queue[0]
             for _ in range(800):
@@ -1016,6 +1056,10 @@ class Game:
         elif ph == "accuracy" and self.cpu_plan:
             if abs(self.acc - self.cpu_plan["acc"]) < 0.04:
                 self.lock_acc()
+        elif ph == "orient" and self.cpu_timer <= 0:
+            p = self.orient_queue[0]
+            self.orient_confirm(random.choice((math.pi / 2, -math.pi / 2)) if p.team == self.turn else 0.0)
+            self.cpu_timer = 0.5
         elif ph == "place" and self.cpu_timer <= 0:
             p = self.place_queue[0]
             for _ in range(400):
@@ -1089,9 +1133,10 @@ class Game:
         if e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
             for rect, c in self.row_rects:
                 if rect.collidepoint(e.pos):
+                    self.peek = c.id               # 正反面預覽：最後點的那枚
                     if c.id in self.sel:           # 同一隊不可重複：再點一次取消
                         self.sel.remove(c.id)
-                    elif len(self.sel) < 3:
+                    elif len(self.sel) < team_max():
                         self.sel.append(c.id)
                     return
             for k, (rect, cid) in enumerate(self.slot_rects):
@@ -1167,6 +1212,15 @@ class Game:
             self.lock_power()
         elif ph == "accuracy" and go:
             self.lock_acc()
+        elif ph == "orient":
+            p = self.orient_queue[0]
+            if e.type == pygame.MOUSEMOTION and p.pos.distance_to(e.pos) > R * 0.6:
+                d = Vector2(e.pos) - p.pos
+                p.angle = math.atan2(d.y, d.x)
+            elif key in (pygame.K_q, pygame.K_e):
+                p.angle += (-1 if key == pygame.K_q else 1) * math.pi / 8
+            elif go:
+                self.orient_confirm(p.angle)
         elif ph == "place" and click:
             self.place(Vector2(e.pos))
         elif ph == "place" and key in (pygame.K_q, pygame.K_e):
@@ -1182,7 +1236,7 @@ class Game:
         ph = self.phase
         if ph != "over" and hasattr(self, "match_t"):
             self.match_t = max(0.0, self.match_t - dt)
-        if ph in ("select", "aim", "power", "accuracy", "place") and hasattr(self, "turn_t"):
+        if ph in ("select", "aim", "power", "accuracy", "place", "orient") and hasattr(self, "turn_t"):
             self.turn_t = max(0.0, self.turn_t - dt)
             if self.turn_t <= 0:
                 self.time_up()
@@ -1264,14 +1318,14 @@ class Game:
             "【擊球】① 選金幣確定　② 滑鼠／←→ 決定方向（H 開關輔助線，關閉時用大三角箭頭）　③ 力量條　④ 精準度條",
             "　　　　精準度：中間綠區＝PERFECT 不偏；一離開就至少偏 5°，越靠邊越大，最邊緣左右各偏 70° 並帶弧線。",
             "【旋轉】出手前 Z 左旋／X 右旋（各 3 段）：金幣會轉、走弧線，撞到對手會傳遞旋轉並帶偏，撞邊框反彈角度改變；越強 PERFECT 綠區越窄。",
-            "【翻轉】開關方向與正對面是リバースポット（黃色弧線）。力道夠強打中 → 彈起，落地正反面各 1/2。",
+            "【翻轉】開關方向與正對面是リバースポット（紅色弧線）。力道夠強打中 → 彈起，落地正反面各 1/2。",
             "【防守方】彈起翻成對方顏色 → OUT；彈起仍是自己顏色 → OX 對決，守 ≥ 攻 セーフ（平手守方勝），原地重新鎖定。",
             "　　　　　被撞出界沒彈起 → 由攻擊方放回場上（離其他金幣 ≥ 1 枚，方向自由 Q／E）。",
             "【メタ幣】被打到彈起時中央核心會翻面，OX 對決用翻面後的數值（例：レオウ白 8000 → 黑面 4000）。",
             "【自滅】自己回合自己的金幣出界（含被自己撞出去的隊友）→ OUT；自爆翻成對方顏色 → OUT。",
             "　　　　自爆仍是自己顏色 → セーフ，原地重新鎖定。沒撞到任何金幣 → 無效攻擊。",
             "【場地】官方 A3 バリ場 297×420 mm（上 ORDER 白／下 XTREME 黑），金幣直徑 43 mm。",
-            "【邊框】撞球檯式：垂直撞擊 ≥ 出界門檻（450，必定大於翻轉門檻 280）才飛出界，否則減速反彈；弱點撞牆 ≥ 280 也會彈起。",
+            "【邊框】撞球檯式：垂直撞擊 ≥ 出界門檻（517，必定大於翻轉門檻 322）才飛出界，否則減速反彈；弱點撞牆 ≥ 322 也會彈起。",
             "【勝利】淘汰對手全部金幣。（程式開頭 OFFICIAL_RULES = False 可改回 isn_ver.1 自訂規則）",
         ]
         y = 110
@@ -1310,7 +1364,7 @@ class Game:
             text(s, "點這裡搜尋名稱／中文名／商品" if not self.q_active else "輸入關鍵字…", (box.x + 10, box.centery), 15,
                  COL["dim"], "midleft")
         lst = self.filtered()
-        rows_y, row_h, n_rows = 166, 34, 17
+        rows_y, row_h, n_rows = 166, 34, 14
         self.scroll = min(self.scroll, max(0, len(lst) - n_rows))
         self.row_rects = []
         area = pygame.Rect(40, rows_y, 760, row_h * n_rows)
@@ -1338,6 +1392,19 @@ class Game:
             text(s, "沒有符合的金幣，請放寬搜尋或分數範圍。", (60, rows_y + 20), 18, COL["dim"])
         text(s, f"符合 {len(lst)} / {len(COINS)} 枚｜分數＝組隊計分（メタ幣算 M 值）｜滾輪捲動｜點一下加入／移除",
              (40, area.bottom + 8), 15, COL["dim"])
+        # 選到的金幣：正反面預覽（清單下方，不遮畫面）
+        pc = BY_ID.get(getattr(self, "peek", None))
+        if pc:
+            pv = pygame.Rect(40, area.bottom + 34, 760, 108)
+            pygame.draw.rect(s, COL["panel2"], pv, border_radius=10)
+            for k, (face, val, lab) in enumerate((("O", pc.o, "白面"), ("X", pc.x, "黑面"))):
+                cx = pv.x + 58 + k * 120
+                self.draw_coin_at(Vector2(cx, pv.y + 46), face, pc, 40 / R, 0)
+                text(s, f"{lab} {val}", (cx, pv.bottom - 12), 14, COL["dim"], "center")
+            text(s, f"{pc.rarity} {pc.jp}", (pv.x + 260, pv.y + 22), 20, COL["text"], "midleft", True)
+            text(s, f"{pc.zh}｜{pc.set}", (pv.x + 260, pv.y + 52), 15, COL["dim"], "midleft")
+            st = "✓ 在隊伍中" if pc.id in self.sel else ("隊伍已滿，未加入" if len(self.sel) >= team_max() else "未加入隊伍")
+            text(s, st, (pv.x + 260, pv.y + 80), 15, COL["green"] if pc.id in self.sel else COL["dim"], "midleft", True)
         # 右側
         px = PANEL_X
         pygame.draw.rect(s, COL["panel"], (px, 70, 430, 700), border_radius=12)
@@ -1387,7 +1454,8 @@ class Game:
             box = pygame.Rect(pos.x - r - 5, pos.y - r - 5, 2 * r + 10, 2 * r + 10)
             for base in (angle, angle + math.pi):
                 a0, a1 = -base - SPOT_HALF, -base + SPOT_HALF
-                pygame.draw.arc(self.screen, COL["yel"], box, a0, a1, 3)
+                pygame.draw.arc(self.screen, (255, 255, 255), box.inflate(2, 2), a0, a1, 6)   # 白邊
+                pygame.draw.arc(self.screen, (255, 42, 42), box, a0, a1, 4)                  # 弱點：紅色
 
     def draw_coin_fallback(self, pos, coin, r, scale, angle, squash, ring_white, alpha):
         surf = pygame.Surface((int(r * 3), int(r * 3)), pygame.SRCALPHA)
@@ -1445,7 +1513,10 @@ class Game:
                 squash = math.cos(t * 2 * math.pi) if p.flipped else math.cos(t * 4 * math.pi)
                 flipped = p.flipped and t > 0.25
             self.draw_coin_at(p.pos, p.camp, p.coin, scale, p.angle, squash, flipped,
-                              alpha=110 if p.out else 255, spots=aiming and p.team != self.turn)
+                              alpha=110 if p.out else 255,
+                              spots=(aiming and p.team != self.turn) or (self.phase == "orient" and self.orient_queue[:1] == [p]))
+            if self.phase == "orient" and self.orient_queue[:1] == [p]:
+                pygame.draw.circle(s, COL["yel"], p.pos, R + 8, 3)
             if abs(p.spin) > 1 and not p.out:            # 旋轉中：洋紅色光圈跟著轉
                 rr = pygame.Rect(0, 0, 2 * R + 10, 2 * R + 10)
                 rr.center = (int(p.pos.x), int(p.pos.y))
@@ -1476,7 +1547,7 @@ class Game:
         if self.phase == "duel":
             self.draw_duel()
         # 倒數：每回合 18 秒（圓）＋全場剩餘
-        if self.phase in ("select", "aim", "power", "accuracy", "place"):
+        if self.phase in ("select", "aim", "power", "accuracy", "place", "orient"):
             t = math.ceil(self.turn_t)
             c = (FIELD.left - 44, FIELD.top + 40)
             hurry = t <= 5
@@ -1764,6 +1835,7 @@ class Game:
             "jump": "彈起翻轉判定中…",
             "duel": "OX 對決！（點擊／Space 跳過）",
             "place": "攻擊方安排回場位置",
+            "orient": "攻擊方決定弱點方向：移動滑鼠轉向、點擊確定（Q／E 微調）",
             "over": "對戰結束",
         }.get(ph, "")
         if self.cur().cpu and ph not in ("moving", "jump", "over"):
