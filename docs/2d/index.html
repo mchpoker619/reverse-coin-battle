@@ -1555,8 +1555,18 @@ const NET = {
   PREFIX: "rcb-reverse-coin-",
   code() { const A = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; let c = ""; for (let i = 0; i < 5; i++) c += A[Math.floor(Math.random() * A.length)]; return c; },
   available() { return typeof window.Peer === "function"; },
-  status(t, bad) { const e = $("netStatus"); e.textContent = t; e.style.color = bad ? "var(--bad)" : ""; },
+  status(t, bad) {                                   // 訊息裡的網址做成可以點的連結
+    const e = $("netStatus"); e.textContent = ""; e.style.color = bad ? "var(--bad)" : "";
+    String(t).split(/(https:\/\/\S+)/).forEach((part, i) => { if (i % 2) { const a = document.createElement("a"); a.href = part; a.target = "_blank"; a.rel = "noopener"; a.textContent = part; a.style.color = "var(--volt)"; a.style.wordBreak = "break-all"; e.appendChild(a); } else e.appendChild(document.createTextNode(part)); });
+  },
   opts() { return Object.assign({debug: 0}, window.RCB_PEER_OPTS || {}); },
+  // 連線錯誤翻成中文；不支援點對點的頁面（claude.ai 分享頁、LINE／IG 內建瀏覽器）引導到網站版
+  errText(e) {
+    const t = e && (e.type || e.message) || "";
+    if (t === "browser-incompatible" || t === "webrtc") return "這個頁面／瀏覽器不支援線上連線（例如 claude.ai 分享頁、LINE 或 IG 內建瀏覽器）。請用 Safari 或 Chrome 打開網站版：" + SITE_URL;
+    if (t === "network" || t === "server-error" || t === "socket-error" || t === "socket-closed") return "連線伺服器暫時連不上，請確認網路後再試一次。";
+    return "連線錯誤：" + t;
+  },
   host() {
     if (!this.available()) return this.status("無法載入連線元件，請確認有網路。", true);
     this.close(); const code = this.code(); this.seat = 0;
@@ -1573,7 +1583,7 @@ const NET = {
       if (c.metadata && c.metadata.role === "watch") return Watch.add(c);   // 第三人觀戰
       if (this.conn) { c.close(); return; } this.attach(c);
     });
-    peer.on("error", e => this.status(e.type === "unavailable-id" ? "房號重複，請再按一次建立" : "連線錯誤：" + (e.type || e.message), true));
+    peer.on("error", e => this.status(e.type === "unavailable-id" ? "房號重複，請再按一次建立" : this.errText(e), true));
   },
   join(code) {
     code = (code || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -1583,7 +1593,7 @@ const NET = {
     this.status("連線中…");
     const peer = this.peer = new Peer(undefined, this.opts());
     peer.on("open", () => this.attach(peer.connect(this.PREFIX + code, {reliable: true})));
-    peer.on("error", e => this.status(e.type === "peer-unavailable" ? "找不到這個房號（房主要先開著畫面）" : "連線錯誤：" + (e.type || e.message), true));
+    peer.on("error", e => this.status(e.type === "peer-unavailable" ? "找不到這個房號（房主要先開著畫面）" : this.errText(e), true));
   },
   attach(c) {
     this.conn = c;
@@ -1768,7 +1778,7 @@ const Watch = {
         if (G.phase !== "over" || !was) alertBox("房主已離線，觀戰結束。"); };
       c.on("close", lost); c.on("error", lost);
     });
-    peer.on("error", e => NET.status(e.type === "peer-unavailable" ? "找不到這個房號（房主要先開著畫面）" : "連線錯誤：" + (e.type || e.message), true));
+    peer.on("error", e => NET.status(e.type === "peer-unavailable" ? "找不到這個房號（房主要先開著畫面）" : NET.errText(e), true));
   },
   recv(v) {
     if (!v || v.t !== "view") return;
@@ -2175,11 +2185,13 @@ $("btnConfirm").onclick = () => {
 };
 $("btnRematch").onclick = () => { if (NET.on) { NET.status(""); return; } UI.show(null); startBattle(); };
 $("btnOverHome").onclick = $("btnHome").onclick = () => { NET.close(); Watch.stop(); if (G.tut) Tut.quit(true); G.scene = "title"; UI.hideDuel(); UI.show("title"); };
-const IN_CLAUDE = !!(window.claude && typeof window.claude.use === "function");
+const IN_CLAUDE = !!(window.claude && typeof window.claude.use === "function") || /claude(usercontent)?\.(ai|com)$/.test(location.hostname)
+  || (window.top !== window && /claude\.ai/.test(document.referrer));
+const SITE_URL = "https://mchpoker619.github.io/reverse-coin-battle/" + (/2D/.test(document.title) ? "2d/" : "3d/");
 if (IN_CLAUDE) { $("btnOnline").textContent = "線上對戰（請用網站版）"; }
 $("btnOnline").onclick = () => {
   if (IN_CLAUDE) { $("netHostBox").hidden = true; UI.show("netOv"); $("netCreate").disabled = $("netJoin").disabled = true;
-    return NET.status("claude.ai 分享頁不支援點對點連線。線上對戰請開「網站版」網址（放在 Netlify 等網站上的版本）。", true); } $("netHostBox").hidden = true; NET.status(NET.available() ? "" : "線上對戰需要網路（載入連線元件中…）"); UI.show("netOv"); };
+    return NET.status("claude.ai 分享頁不支援線上連線。線上對戰、觀戰請用 Safari 或 Chrome 打開網站版：" + SITE_URL, true); } $("netHostBox").hidden = true; NET.status(NET.available() ? "" : "線上對戰需要網路（載入連線元件中…）"); UI.show("netOv"); };
 $("netCreate").onclick = () => NET.host();
 $("netJoin").onclick = () => NET.join($("netJoinCode").value);
 $("netWatch").onclick = () => Watch.join($("netJoinCode").value);
