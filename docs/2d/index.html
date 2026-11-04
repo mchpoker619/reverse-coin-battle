@@ -269,6 +269,7 @@ details.rtext summary { cursor: pointer; font-weight: 800; color: var(--text); m
       <button id="camSound" aria-pressed="true">音效：開</button>
       <button id="camMusic" aria-pressed="true">音樂：開</button>
       <button id="camGuide" aria-pressed="true">輔助線：開</button>
+      <button id="camCtrl" aria-pressed="false" title="彈弓式：按住往後拉；點選式：點方向 → 力量條 → 精準度（V 鍵切換）">操作：彈弓式</button>
       <button id="camRotL" aria-label="鏡頭左轉">⟲</button>
       <button id="camRotR" aria-label="鏡頭右轉">⟳</button>
     </div>
@@ -327,6 +328,7 @@ details.rtext summary { cursor: pointer; font-weight: 800; color: var(--text); m
       <button class="btn" id="tSound" aria-pressed="true">音效：開</button>
       <button class="btn" id="tMusic" aria-pressed="true">音樂：開</button>
     </div>
+    <button class="btn" id="tCtrl" style="width:100%" aria-pressed="false">操作：彈弓式（點一下切換）</button>
     <button class="btn" id="tHaptic" style="width:100%" aria-pressed="true">手機震動回饋：開</button>
     <div class="row2">
       <button class="btn" id="btnRules">規則說明</button>
@@ -349,6 +351,7 @@ details.rtext summary { cursor: pointer; font-weight: 800; color: var(--text); m
       <li><b>賽前</b>：每方 1～3 顆、同一隊不可重複；OX 合計 ≤ 15,000，メタ幣算 M 值（正＋反）÷2；上場看自己陣營那一面。猜拳勝方選陣營，擲金幣決定先攻。</li>
       <li><b>重新鎖定方向</b>：彈起後 Safe 留在場內的金幣（防守方 OX 存活、攻擊方自爆沒變色）原地重新鎖定，<b>弱點方向由攻擊方決定</b>；被撞出場外 Safe 的金幣由攻擊方放回並決定方向（判定助手 v3）。</li>
       <li><b>簡易規則 EASY 1V1</b>：每方 1 枚；彈起沒變色直接 Safe（不比 OX）；雙方同時翻成對方色＝平手、只有一方變色＝那一方 OUT。</li>
+      <li><b>操作模式</b>：彈弓式（按住自己的金幣往後拉、放開發射）或點選式（點金幣 → 對準點一下 → 力量條點一下 → 精準度）。標題畫面或對戰中工具列都能切換（V 鍵）。</li>
       <li><b>全場限時 8 分鐘</b>：時間到時（等當下這一回合結束），比雙方開場三枚金幣的 M 值合計，合計<b>較少</b>的一方獲勝；相同為平手。畫面左上顯示全場剩餘時間。</li>
       <li><b>發射</b>：點自己的金幣，按住畫面往反方向拉（像彈弓），拉越長越大力（上限 100%），放開後跑精準度條。每回合 18 秒內要完成出手，否則視同放棄、換對方進攻（畫面上方有倒數）。</li>
       <li><b>擊球</b>：① 點自己的金幣，再點一次確定 ② 移動滑鼠瞄準（←→ 微調）點擊確定 ③ 力量條 ④ 精準度條：中間綠區＝PERFECT 不偏；一離開綠區就至少偏 5°，越靠邊越大，最邊緣以發射方向為基準左右各偏 70°，並帶弧線。Space／Enter 也可確定。<b>輔助線</b>：青色＝自己路線、橘色＝對手被撞去向、綠色＝自己分開方向；按 H 或「輔助線」按鈕可關閉，改用三角箭頭瞄準。</li>
@@ -540,9 +543,10 @@ const RAIL_T = 1.6, RAIL_H = 1.2;  // 邊框厚度、高度
 const START_X = [0.1816, 0.4983, 0.8150];
 const START_Y = {top:0.1240, bottom:0.8725};
 const P = {
-  FRICTION: 39.4, VMIN: 17.6, VMAX: 83.9,  // 力量整體＋10%、低力量也推得動（原 9.7～76.3）
+  FRICTION: 40.58, VMIN: 17.6, VMAX: 83.9,  // 場地摩擦 +3%（原 39.4）；力量整體＋10%、低力量也推得動
   OUT_SPEED: 31.4,               // 垂直撞向邊框 ≥ 此速度 → 飛出界（必定大於翻轉門檻 UNLOCK）
-  UNLOCK: 19.55,                 // 翻轉力道：リバースポット受到的撞擊速度門檻
+  UNLOCK: 17.99,                 // 翻轉力道：金幣互撞時リバースポット受到的撞擊速度門檻（19.55 再降 8%）
+  UNLOCK_RAIL: 19.55,            // 弱點撞「邊框」的翻轉門檻（維持不變）
   RAIL_REST: 0.7, COIN_REST: 0.98,   // 金幣互撞能量損失減少（原 0.95）
   // 旋轉（撞球式）：單位 rad/s。金幣當作均勻圓盤，轉動慣量 I = ½ m R²
   SPIN_STEP: 8.75,         // 出手旋轉每一段的角速度（±3 段 → 最多約 21 rad/s ≈ 3.3 圈/秒）
@@ -553,14 +557,14 @@ const P = {
   CURL_K: 0.0495,       // ＋10%： 旋轉中滑行的側向弧線（冰壺效果）
   ACC_SPIN: 6,          // 精準度沒按準時，額外帶出的旋轉
   SPIN_PERF: 0.2,       // 每加 1 段旋轉，PERFECT 區縮小 20%（3 段 → 剩 40%）
-  SPOT: 13.44 * Math.PI / 180,   /* 弱點範圍再縮小 40%（±22.4° → ±13.44°） */ ACC_ERR: 70 * Math.PI / 180, CURVE: 24, PERFECT: 0.07, MISS_MIN: 5 / 70,
+  SPOT: 14.112 * Math.PI / 180,  /* 弱點範圍 ±14.1°（±13.44° 再加大 5%） */ ACC_ERR: 70 * Math.PI / 180, CURVE: 24, PERFECT: 0.07, MISS_MIN: 5 / 70,
   FLIP: 0.5, STOP: 0.18, DUEL_TIME: 2.4,
   PULL_MAX: 12,         // 後拉發射：拉 12 cm（桌面距離）＝ 100% 力量（上限）
   PULL_MIN: 0.04,       // 拉不到 4% 視為取消
   TURN_TIME: 18,
   MATCH_TIME: 480,      // 全場限時 8 分鐘：時間到比開場三枚的 M 值合計，少的一方獲勝        // 每回合出手限時（秒），超過＝放棄這回合
 };
-if (!(P.OUT_SPEED > P.UNLOCK)) throw new Error("出界門檻必須大於翻轉門檻");
+if (!(P.OUT_SPEED > Math.max(P.UNLOCK, P.UNLOCK_RAIL))) throw new Error("出界門檻必須大於翻轉門檻");
 const angDiff = (a, b) => ((a - b + Math.PI) % (2*Math.PI) + 2*Math.PI) % (2*Math.PI) - Math.PI;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -806,7 +810,7 @@ function railBounce(p) {
     SFX.play("rail_hit", vn / 30);
     if (vn >= P.OUT_SPEED) { p.out = true; p.outT = 0; p.vx *= 0.55; p.vz *= 0.55; return; }
     const ox = k === "x" ? (pos < lo ? -1 : 1) : 0, oz = k === "z" ? (pos < lo ? -1 : 1) : 0;
-    if (vn >= P.UNLOCK && spotFacing(p, ox, oz) && vn > p.spotSpeed) { p.spotSpeed = vn; p.spotSrc = "rail"; }
+    if (vn >= P.UNLOCK_RAIL && spotFacing(p, ox, oz) && vn > p.spotSpeed) { p.spotSpeed = vn; p.spotSrc = "rail"; }
     p[k] = pos < lo ? lo : hi;
     p[vk] = -p[vk] * P.RAIL_REST;
     // 邊框摩擦：接觸點切向速度（含旋轉）→ 改變反彈角度與旋轉（撞球塞球效果）
@@ -824,7 +828,7 @@ function allStopped() { return G.pieces.every(p => !p.alive || (Math.hypot(p.vx,
 function startResolve() {
   for (const p of G.pieces) {
     p.vx = 0; p.vz = 0; p.spin = 0;
-    if (p.alive && p.spotSpeed >= P.UNLOCK) {
+    if (p.alive && p.spotSpeed >= (p.spotSrc === "rail" ? P.UNLOCK_RAIL : P.UNLOCK)) {
       p.unlocked = true;
       p.flipped = rnd() < P.FLIP;            // 彈起後落地：正反各 1/2
       if (G.tut && p.team === 1) { G.tut.popped = true; if (G.tut.force !== undefined) p.flipped = G.tut.force; }   // 教學：示範指定結果
@@ -1027,6 +1031,7 @@ function update(dt) {
     if (G.turnT <= 0 && !(NET.on && cur().remote)) { timeUp(); return; }
   }
   if (ph === "power") {
+    if (NET.on && !locked()) NET.aim();
     G.power += G.pdir * dt * 0.9;
     if (G.power >= 1) { G.power = 1; G.pdir = -1; } if (G.power <= 0) { G.power = 0; G.pdir = 1; }
   } else if (ph === "accuracy") {
@@ -1431,6 +1436,22 @@ const Haptic = {
   step: -1,
   pull(pw) { const k = pw >= 1 ? 10 : Math.floor(pw * 10); if (k !== this.step) { if (k > this.step && k > 0) this.buzz(k === 10 ? 35 : 7); this.step = k; } },
 };
+// 操作模式：sling＝彈弓式（按住往後拉、放開）；click＝點選式（點金幣 → 對準點一下 → 力量條點一下 → 精準度）
+const CTRL = {
+  mode: (() => { try { return localStorage.getItem("rcb-ctrl") === "click" ? "click" : "sling"; } catch (e) { return "sling"; } })(),
+  sling() { return this.mode !== "click"; },
+  set(m) {
+    this.mode = m === "click" ? "click" : "sling";
+    try { localStorage.setItem("rcb-ctrl", this.mode); } catch (e) {}
+    // 正在瞄準／跑力量條時切換 → 退回選金幣，避免卡在一半
+    if (G.scene === "battle" && !locked() && ["aim", "power"].includes(G.phase)) { G.phase = "select"; G.pull = null; G.power = 0; if (window.NET) NET.aim(); }
+    this.sync(); UI.refresh();
+  },
+  sync() {
+    const t = this.sling() ? "操作：彈弓式" : "操作：點選式";
+    for (const id of ["camCtrl", "tCtrl"]) { const b = document.getElementById(id); if (b) { b.textContent = id === "tCtrl" ? t + "（點一下切換）" : t; b.setAttribute("aria-pressed", !this.sling()); } }
+  },
+};
 const Input = {
   // 後拉力量以螢幕距離計算：不管金幣在哪個角落、鏡頭什麼角度，都拉得到 100%
   pullPx() { return clamp(Math.min(innerWidth, innerHeight) * 0.22, 90, 200); },
@@ -1440,6 +1461,16 @@ const Input = {
     const ph = G.phase;
     if (ph === "duel") { skipDuel(); return; }
     if (locked()) return;
+    if (!CTRL.sling() && (ph === "select" || ph === "aim")) {
+      for (const p of ownAlive()) if (Math.hypot(p.x - x, p.z - z) <= R + 0.6) { G.selected = p; G.phase = "aim"; G.power = 0; UI.refresh(); NET.aim(); return; }
+      if (ph === "aim" && G.selected) {                 // 點在別處＝朝那裡瞄準並開始力量條（手機用點的就能瞄準）
+        const dx = x - G.selected.x, dz = z - G.selected.z;
+        if (Math.hypot(dx, dz) > 0.6) G.aim = Math.atan2(dz, dx);
+        confirmAim(); NET.aim(true);
+      }
+      return;
+    }
+    if (ph === "power") { lockPower(); return; }
     if (ph === "select" || ph === "aim") {
       for (const p of ownAlive()) if (Math.hypot(p.x - x, p.z - z) <= R + 0.6 && p !== G.selected) { G.selected = p; G.phase = "select"; UI.refresh(); NET.aim(); }
       if (!G.selected) return;
@@ -1455,6 +1486,11 @@ const Input = {
     if (G.scene === "battle" && G.phase === "orient" && !locked()) {
       const p = G.orientQueue[0];
       if (p && Math.hypot(x - p.x, z - p.z) > R * 0.6) { p.angle = Math.atan2(z - p.z, x - p.x); }
+      return;
+    }
+    if (!CTRL.sling() && G.scene === "battle" && G.phase === "aim" && !locked() && G.selected) {   // 點選式：方向跟著滑鼠
+      const dx = x - G.selected.x, dz = z - G.selected.z;
+      if (Math.hypot(dx, dz) > R * 0.6) { G.aim = Math.atan2(dz, dx); NET.aim(); }
       return;
     }
     if (G.scene === "battle" && G.phase === "aim" && !locked() && G.selected && G.pull) {
@@ -1488,6 +1524,7 @@ const Input = {
       else if (e.key === "ArrowUp") { e.preventDefault(); G.power = clamp(G.power + 0.05, 0, 1); NET.aim(); }
       else if (e.key === "ArrowDown") { e.preventDefault(); G.power = clamp(G.power - 0.05, 0, 1); NET.aim(); }
       else if (e.key === "Escape") { G.phase = "select"; G.pull = null; G.power = 0; UI.refresh(); }
+      else if (go && !CTRL.sling()) confirmAim();
       else if (go && G.power >= P.PULL_MIN) lockPower();
     } else if (ph === "power" && go) lockPower();
     else if (ph === "accuracy" && go) lockAcc();
@@ -1497,6 +1534,7 @@ const Input = {
   },
 };
 document.addEventListener("keydown", e => {
+  if ((e.key === "v" || e.key === "V") && !e.ctrlKey && !e.metaKey) { CTRL.set(CTRL.sling() ? "click" : "sling"); return; }
   if (e.key === "c" || e.key === "C") { GFX.setMode(GFX.cam.mode === "top" ? "tilt" : "top"); return; }
   if (e.key === "h" || e.key === "H") { UI.setGuide(!UI.guide); return; }
   if (e.key === "m" || e.key === "M") { SFX.unlock(); SFX.toggleMusic(); return; }
@@ -1875,7 +1913,8 @@ const Tut = {
   bar() {
     if (!G.tut) return;
     const L = this.LESSONS[G.tut.k], ph = G.phase;
-    $("tutBar").innerHTML = `第 ${G.tut.k + 1}/3 課｜` + (L.bar[ph] || L.bar[ph === "power" ? "aim" : "moving"] || "");
+    const CB = {select: "點自己的金幣（下方那枚）", aim: "移動滑鼠／手指點對手方向，<b>點一下</b>開始力量條", power: G.tut.k ? "力量條到 <b>70% 以上</b>時點一下" : "力量條到 <b>40% 左右</b>時點一下"};
+    $("tutBar").innerHTML = `第 ${G.tut.k + 1}/3 課｜` + ((!CTRL.sling() && CB[ph]) || L.bar[ph] || L.bar[ph === "power" ? "aim" : "moving"] || "");
   },
   passed() { return G.tut && (G.tut.k === 0 ? G.shooterHit : G.tut.popped); },
   result(ok, why) {
@@ -1919,8 +1958,11 @@ const UI = {
       $(id).innerHTML = `<h3 class="${t === G.turn ? "on" : ""}">${p.name}｜${CAMP_ZH[p.camp]}</h3>` +
         G.pieces.filter(q => q.team === t).map(q => `<div class="row ${q.alive ? "" : "dead"}"><img alt="" src="${faceURL(q.coin.id, q.camp === "O" ? "o" : "x")}"><span>${q.coin.rar} ${q.coin.jp}</span><span class="v">${pval(q)}</span></div>`).join("");
     });
-    const hints = {select: "① 點自己的金幣，按住往後拉、放開發射｜Tab 切換", aim: "② 按住畫面往反方向拉（拉越長越大力），放開發射" + (RULES.spin ? "｜Z／X 旋轉" : "") + "｜鍵盤：←→ 方向、↑↓ 力量、Space 發射",
-      power: "③ 放開發射", accuracy: "④ 精準度：停在中間綠區＝PERFECT", moving: "金幣滑行中…", jump: "彈起翻轉中…",
+    const sl = CTRL.sling();
+    const hints = {select: sl ? "① 點自己的金幣，按住往後拉、放開發射｜Tab 切換" : "① 點自己的金幣（點選式）｜Tab 切換",
+      aim: sl ? "② 按住畫面往反方向拉（拉越長越大力），放開發射" + (RULES.spin ? "｜Z／X 旋轉" : "") + "｜鍵盤：←→ 方向、↑↓ 力量、Space 發射"
+              : "② 移動滑鼠（或手指點）對準方向，點一下開始力量條" + (RULES.spin ? "｜Z／X 旋轉" : "") + "｜←→ 微調",
+      power: sl ? "③ 放開發射" : "③ 力量條：點畫面任何地方決定力量", accuracy: "④ 精準度：停在中間綠區＝PERFECT", moving: "金幣滑行中…", jump: "彈起翻轉中…",
       duel: "OX 對決！（點擊／Space 繼續）", orient: "攻擊方決定重新鎖定的方向：移動滑鼠讓開關朝向想要的方向（Q／E 微調），點擊確定", place: "攻擊方：點場地安排回場位置（綠圈＝可放，Q／E 轉方向）", over: "對戰結束"};
     $("hint").textContent = pl.cpu && !["moving","jump","duel","over"].includes(G.phase) ? "電腦思考中…"
       : pl.remote && !["moving","jump","duel","over"].includes(G.phase) ? (G.phase === "sync" ? "同步對手結果中…" : "對手回合，等待對手出手…") : (hints[G.phase] || "");
@@ -2166,12 +2208,14 @@ $("netCopy").onclick = () => { const v = $("netLink").value; (navigator.clipboar
 $("duel").addEventListener("pointerdown", () => { if (G.phase === "duel") skipDuel(); });
 // 精準度跑條：手指／滑鼠點在畫面任何地方都算（按鈕、輸入框、開著的視窗除外）
 document.addEventListener("pointerdown", e => {
-  if (G.scene !== "battle" || G.phase !== "accuracy" || locked() || G.spectate) return;
-  if (e.button > 0 || e.target.closest("button, a, input, select, textarea, .ov")) return;
-  lockAcc();
+  if (G.scene !== "battle" || !["accuracy", "power"].includes(G.phase) || locked() || G.spectate) return;
+  if (e.button > 0 || e.target.tagName === "CANVAS" || e.target.closest("button, a, input, select, textarea, .ov")) return;   // 場地上的點擊交給場地處理，避免一次點擊觸發兩步
+  if (G.phase === "power") lockPower(); else lockAcc();
 }, true);
 $("camTop").onclick = () => GFX.setMode("top");
 $("camGuide").onclick = () => UI.setGuide(!UI.guide);
+$("camCtrl").onclick = $("tCtrl").onclick = () => CTRL.set(CTRL.sling() ? "click" : "sling");
+CTRL.sync();
 $("camSound").onclick = () => { SFX.unlock(); SFX.toggle(); };
 function setFold(f) {
   $("camBar").classList.toggle("folded", f);
@@ -2217,7 +2261,7 @@ G.players[0].camp = "X"; G.players[1].camp = "O";
 G.players[0].team = PRESETS[0][1].slice(); G.players[1].team = PRESETS[1][1].slice();
 G.pieces = []; G.players.forEach((pl, t) => { pl.side = pl.camp === "O" ? "top" : "bottom"; const z = -H/2 + START_Y[pl.side]*H; pl.team.forEach((id, k) => G.pieces.push(makePiece(BY_ID[id], t, pl.camp, -W/2 + START_X[k]*W, z, pl.side === "bottom" ? 0 : Math.PI))); });
 GFX.buildPieces(); GFX.cam.tTheta = 0.5;
-window.__RCB = {Tut, Watch, Report, Haptic, SFX, predictPath, accErr, perfZone, G, P, RULES, physics, collide, railBounce, startResolve, applyResults, afterResults, startBattle, beginTurn, update, placeValid, place, confirmSelect, confirmAim, lockPower, lockAcc, newPlayer, PRESETS, BY_ID, COINS, R, W, H, UI, GFX, pval, skipDuel};
+window.__RCB = {CTRL, Tut, Watch, Report, Haptic, SFX, predictPath, accErr, perfZone, G, P, RULES, physics, collide, railBounce, startResolve, applyResults, afterResults, startBattle, beginTurn, update, placeValid, place, confirmSelect, confirmAim, lockPower, lockAcc, newPlayer, PRESETS, BY_ID, COINS, R, W, H, UI, GFX, pval, skipDuel};
 </script>
 
 </body>
