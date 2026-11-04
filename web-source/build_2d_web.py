@@ -47,6 +47,9 @@ os.makedirs(os.path.join(HERE, 'dist'), exist_ok=True)
 out = os.path.join(HERE, 'dist', '逆轉金幣2D_網頁版.html')
 open(out, 'w', encoding='utf-8').write(web)
 site = src.replace(PEER_TAG, '<script>' + src_site_peer + '</script>')
+MQTT_TAG = '<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>'
+assert MQTT_TAG in site
+site = site.replace(MQTT_TAG, '<script>' + open(os.path.join(HERE, 'mqtt.min.js'), encoding='utf-8').read().replace('</script>', '<\\/script>') + '</script>')
 site = ('<!doctype html>\n<html lang="zh-Hant">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">\n</head>\n<body>\n' + site + '\n</body>\n</html>\n')
 open(os.path.join(HERE, 'dist', 'ReverseCoin2D_site.html'), 'w', encoding='utf-8').write(site)
 print(out, f'{os.path.getsize(out)/1e6:.1f} MB')

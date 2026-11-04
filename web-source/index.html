@@ -484,6 +484,7 @@ details.rtext summary { cursor: pointer; font-weight: 800; color: var(--text); m
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>
 <script>
 "use strict";
 // ======================================================================== 金幣資料（101 枚）
@@ -1722,13 +1723,96 @@ const $ = id => document.getElementById(id);
 // ======================================================================== 線上對戰（PeerJS／WebRTC 點對點）
 // 房主＝玩家 1（座位 0），加入者＝玩家 2（座位 1）。各自組隊 → 房主猜拳 → 勝方選陣營＋擲金幣 → 開打。
 // 出手方的裝置為準：shot（出手參數＋當下狀態）讓對手同步播放，settle（停下後的狀態）覆蓋，place（放回場）。
+// ======================================================================== 中繼連線（MQTT over WebSocket）
+// 點對點連不上（行動網路、公司網路常見）時改走這裡：房主收件匣 <房號>/h、加入者 <房號>/g、觀眾 <房號>/w
+const Relay = {
+  URLS: window.RCB_RELAY_URLS || ["wss://broker.hivemq.com:8884/mqtt", "wss://broker.emqx.io:8084/mqtt"],
+  cli: null, pending: null, routes: {},
+  ok() { return !!(window.mqtt && typeof window.mqtt.connect === "function"); },
+  topic(code, box) { return "rcb-reverse-coin/v1/" + code + "/" + box; },
+  connect() {
+    if (this.cli && this.cli.connected) return Promise.resolve(this.cli);
+    if (this.pending) return this.pending;
+    if (!this.ok()) return Promise.resolve(null);
+    this.pending = new Promise(res => {
+      let i = 0;
+      const next = () => {
+        if (i >= this.URLS.length) { this.pending = null; return res(null); }
+        const url = this.URLS[i++];
+        let c, done = false;
+        try { c = mqtt.connect(url, {connectTimeout: 7000, reconnectPeriod: 2000, clean: true, keepalive: 30}); } catch (e) { return next(); }
+        const t = setTimeout(() => { if (!done) { done = true; try { c.end(true); } catch (e) {} next(); } }, 8000);
+        c.on("connect", () => {
+          if (done) return; done = true; clearTimeout(t);
+          this.cli = c; this.pending = null;
+          c.on("message", (topic, buf) => { let m; try { m = JSON.parse(buf.toString()); } catch (e) { return; } const f = this.routes[topic]; if (f) f(m); });
+          c.on("connect", () => { for (const tp of Object.keys(this.routes)) c.subscribe(tp, {qos: 1}); });   // 斷線重連後重新訂閱
+          res(c);
+        });
+        c.on("error", () => {});
+      };
+      next();
+    });
+    return this.pending;
+  },
+  listen(code, box, fn) { const tp = this.topic(code, box); this.routes[tp] = fn; if (this.cli) this.cli.subscribe(tp, {qos: 1}); },
+  unlisten(code, box) { const tp = this.topic(code, box); delete this.routes[tp]; if (this.cli) try { this.cli.unsubscribe(tp); } catch (e) {} },
+  pub(code, box, m) { if (this.cli) this.cli.publish(this.topic(code, box), JSON.stringify(m), {qos: 1}); },
+  // 包成跟 PeerJS DataConnection 一樣的介面（open／on／send／close），NET 不用改
+  conn(code, mine, other) {
+    const L = {}, seen = new Set();
+    let seq = 0, lastRx = Date.now();
+    const w = {
+      open: false, relay: true,
+      on(ev, fn) { (L[ev] = L[ev] || []).push(fn); return w; },
+      off(ev, fn) { L[ev] = (L[ev] || []).filter(f => f !== fn); return w; },
+      emit(ev, a) { for (const f of (L[ev] || []).slice()) f(a); },
+      send(m) { if (w.open) Relay.pub(code, other, {_s: ++seq, d: m}); },
+      rx(m) {
+        lastRx = Date.now();
+        if (m.bye) { w.close(true); return; }
+        if (m.hb || m._s === undefined) return;
+        if (seen.has(m._s)) return; seen.add(m._s);                  // QoS1 可能重複送達 → 依序號去重
+        if (seen.size > 4000) seen.clear();
+        w.emit("data", m.d);
+      },
+      close(remote) {
+        if (w.closed) return; w.closed = true; const was = w.open; w.open = false; clearInterval(w.hbT);
+        if (!remote) try { Relay.pub(code, other, {bye: 1}); } catch (e) {}
+        Relay.unlisten(code, mine);
+        if (was) w.emit("close");
+      },
+      start() {
+        w.open = true;
+        w.hbT = setInterval(() => {
+          try { Relay.pub(code, other, {hb: 1}); } catch (e) {}
+          if (Date.now() - lastRx > 25000) { w.emit("error", new Error("relay timeout")); w.close(true); }   // 對方 25 秒沒有任何訊號 → 斷線
+        }, 4000);
+        setTimeout(() => w.emit("open"), 0);
+      },
+    };
+    return w;
+  },
+};
+window.Relay = Relay;
+
 const NET = {
   on: false, conn: null, peer: null, seat: 0, q: [], teams: [null, null], lastAim: 0,
   PREFIX: "rcb-reverse-coin-",
   code() { const A = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"; let c = ""; for (let i = 0; i < 5; i++) c += A[Math.floor(Math.random() * A.length)]; return c; },
   available() { return typeof window.Peer === "function"; },
-  status(t, bad) { const e = $("netStatus"); e.textContent = t; e.style.color = bad ? "var(--bad)" : ""; },
+  status(t, bad) {                                   // 訊息裡的網址做成可以點的連結
+    const e = $("netStatus"); e.textContent = ""; e.style.color = bad ? "var(--bad)" : "";
+    String(t).split(/(https:\/\/\S+)/).forEach((part, i) => { if (i % 2) { const a = document.createElement("a"); a.href = part; a.target = "_blank"; a.rel = "noopener"; a.textContent = part; a.style.color = "var(--volt)"; a.style.wordBreak = "break-all"; e.appendChild(a); } else e.appendChild(document.createTextNode(part)); });
+  },
   opts() { return Object.assign({debug: 0}, window.RCB_PEER_OPTS || {}); },
+  // 連線錯誤翻成中文；不支援點對點的頁面（claude.ai 分享頁、LINE／IG 內建瀏覽器）引導到網站版
+  errText(e) {
+    const t = e && (e.type || e.message) || "";
+    if (t === "browser-incompatible" || t === "webrtc") return "這個頁面／瀏覽器不支援線上連線（例如 claude.ai 分享頁、LINE 或 IG 內建瀏覽器）。請用 Safari 或 Chrome 打開網站版：" + SITE_URL;
+    if (t === "network" || t === "server-error" || t === "socket-error" || t === "socket-closed") return "連線伺服器暫時連不上，請確認網路後再試一次。";
+    return "連線錯誤：" + t;
+  },
   host() {
     if (!this.available()) return this.status("無法載入連線元件，請確認有網路。", true);
     this.close(); const code = this.code(); this.seat = 0;
@@ -1745,7 +1829,33 @@ const NET = {
       if (c.metadata && c.metadata.role === "watch") return Watch.add(c);   // 第三人觀戰
       if (this.conn) { c.close(); return; } this.attach(c);
     });
-    peer.on("error", e => this.status(e.type === "unavailable-id" ? "房號重複，請再按一次建立" : "連線錯誤：" + (e.type || e.message), true));
+    this.code_ = code;
+    this.hostRelay(code);
+    peer.on("error", e => this.status(e.type === "unavailable-id" ? "房號重複，請再按一次建立" : this.errText(e), true));
+  },
+  // 房主的中繼收件匣：收「加入」與「觀戰」請求，點對點不通時改用中繼
+  hostRelay(code) {
+    Relay.connect().then(cli => {
+      if (!cli || this.code_ !== code) return;
+      if ($("netCode").textContent !== code) {            // 點對點伺服器連不上時，也能靠中繼開房
+        $("netCode").textContent = code; $("netHostBox").hidden = false;
+        $("netLink").value = location.href.split("#")[0] + "#join-" + code;
+        $("netWatchLink").value = location.href.split("#")[0] + "#watch-" + code;
+        this.status("房間已建立，把房號或連結傳給朋友，等待加入…");
+      }
+      Relay.listen(code, "h", m => {
+        if (m.join) {
+          if (this.on) { Relay.pub(code, "g", {full: 1}); return; }                       // 已經有對手
+          if (this.conn && !this.conn.relay) { try { this.conn.close(); } catch (e) {} this.conn = null; }  // 點對點卡住 → 改中繼
+          if (this.conn && this.conn.relay) return;
+          const w = Relay.conn(code, "h", "g");
+          this.relayH = w;
+          Relay.pub(code, "g", {ack: 1});
+          this.attach(w); w.start();
+        } else if (m.watch) { Watch.relayOn(code); }
+        else if (this.relayH) this.relayH.rx(m);
+      });
+    });
   },
   join(code) {
     code = (code || "").trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
@@ -1754,21 +1864,46 @@ const NET = {
     this.close(); this.seat = 1;
     this.status("連線中…");
     const peer = this.peer = new Peer(undefined, this.opts());
-    peer.on("open", () => this.attach(peer.connect(this.PREFIX + code, {reliable: true})));
-    peer.on("error", e => this.status(e.type === "peer-unavailable" ? "找不到這個房號（房主要先開著畫面）" : "連線錯誤：" + (e.type || e.message), true));
+    peer.on("open", () => { if (!this.on && !(this.conn && this.conn.relay)) this.attach(peer.connect(this.PREFIX + code, {reliable: true})); });
+    this.code_ = code;
+    clearTimeout(this.fbT);
+    this.fbT = setTimeout(() => this.joinRelay(code), window.RCB_FORCE_RELAY ? 10 : 7000);
+    peer.on("error", e => this.status(e.type === "peer-unavailable" ? "找不到這個房號（房主要先開著畫面）" : this.errText(e), true));
+  },
+  joinRelay(code) {
+    if (this.on || this.code_ !== code || this.seat !== 1) return;
+    this.status("直接連線不通，改用中繼伺服器連線中…");
+    Relay.connect().then(cli => {
+      if (this.on || this.code_ !== code) return;
+      if (!cli) return this.status("連不上中繼伺服器，請確認網路後再試一次。", true);
+      let w = null, tries = 0;
+      Relay.listen(code, "g", m => {
+        if (m.full) { clearInterval(this.joinT); return this.status("這個房間已經有對手了", true); }
+        if (m.ack && !w) {
+          clearInterval(this.joinT);
+          if (this.conn && !this.conn.relay) { try { this.conn.close(); } catch (e) {} }
+          w = Relay.conn(code, "g", "h"); this.attach(w); w.start();
+        } else if (w) w.rx(m);
+      });
+      const ask = () => { if (w || this.on) return clearInterval(this.joinT);
+        if (++tries > 10) { clearInterval(this.joinT); return this.status("找不到這個房號（房主要先開著畫面）", true); }
+        Relay.pub(code, "h", {join: 1}); };
+      clearInterval(this.joinT); ask(); this.joinT = setInterval(ask, 2500);
+    });
   },
   attach(c) {
+    if (this.on && this.conn && this.conn !== c) { try { c.close(); } catch (e) {} return; }   // 已經連上了 → 晚到的另一條連線關掉
     this.conn = c;
     c.on("open", () => {
       this.on = true; this.q = []; this.teams = [null, null];
       this.prevGuide = UI.guide; UI.setGuide(false); $("camGuide").disabled = true; $("camGuide").title = "線上對戰只能用輔助線關閉模式";
-      this.status("已連線！");
+      this.status(c.relay ? "已連線！（中繼模式）" : "已連線！");
       if (this.seat === 0) this.send({t: "hello", rules: RULES.mode, spin: RULES.spin});
       setTimeout(() => this.startBuild(), 300);
     });
-    c.on("data", m => this.recv(m));
-    c.on("close", () => this.lost());
-    c.on("error", () => this.lost());
+    c.on("data", m => { if (this.conn === c) this.recv(m); });   // 被換掉的舊連線（卡住的點對點）不再作用
+    c.on("close", () => { if (this.conn === c) this.lost(); });
+    c.on("error", () => { if (this.conn === c) this.lost(); });
   },
   lost() {
     if (!this.on) return;
@@ -1777,7 +1912,7 @@ const NET = {
     alertBox("對手已離線，線上對戰結束。");
   },
   restoreGuide() { if (this.prevGuide !== undefined) { const g = this.prevGuide; this.prevGuide = undefined; $("camGuide").disabled = false; $("camGuide").title = ""; this.on = false; UI.setGuide(g); } },
-  close() { Watch.stop(); try { this.conn && this.conn.close(); } catch (e) {} try { this.peer && this.peer.destroy(); } catch (e) {} this.conn = this.peer = null; this.on = false; this.restoreGuide(); },
+  close() { Watch.stop(); clearTimeout(this.fbT); clearInterval(this.joinT); if (this.code_) { Relay.unlisten(this.code_, "h"); Relay.unlisten(this.code_, "g"); } this.code_ = null; this.relayH = null; try { this.conn && this.conn.close(); } catch (e) {} try { this.peer && this.peer.destroy(); } catch (e) {} this.conn = this.peer = null; this.on = false; this.restoreGuide(); },
   send(m) { if (this.on && this.conn && this.conn.open) this.conn.send(m); },
   // 狀態快照：位置、方向、存活、出界，以及判定用的撞擊資料
   snap(full) {
@@ -1910,14 +2045,24 @@ const Watch = {
       pc: G.pieces.map(p => [p.coin.id, p.team, p.camp, +p.x.toFixed(3), +p.z.toFixed(3), +p.angle.toFixed(3), p.alive ? 1 : 0, p.out ? 1 : 0, p.flipped ? 1 : 0, p.unlocked ? 1 : 0])});
     return v;
   },
+  // 有人用中繼觀戰 → 房主每 0.1 秒把畫面發到 <房號>/w（2 分鐘沒人再要求就停）
+  relayOn(code) {
+    this.relayCode = code; this.relayUntil = Date.now() + 120000;
+    if (!this.timer) this.timer = setInterval(() => this.broadcast(), 100);
+    this.lastLog = -1; this.broadcast(true);
+  },
   broadcast(force) {
-    if (!this.list.length) return;
+    const rel = this.relayCode && Date.now() < this.relayUntil;
+    if (!this.list.length && !rel) return;
     const v = this.view();
-    if (force || G.log.length !== this.lastLog || G.phase === "over") { v.log = G.log.slice(-40); this.lastLog = G.log.length; }
+    if (force || G.log.length !== this.lastLog || G.phase === "over" || (rel && Math.random() < 0.05)) { v.log = G.log.slice(-40); this.lastLog = G.log.length; }
     for (const c of this.list) try { if (c.open) c.send(v); } catch (e) {}
+    if (rel) try { Relay.pub(this.relayCode, "w", v); } catch (e) {}
   },
   stop() {
-    clearInterval(this.timer); this.timer = null;
+    clearInterval(this.timer); this.timer = null; clearInterval(this.wT); clearTimeout(this.wfT);
+    if (this.relayCode) Relay.unlisten(this.relayCode, "w");
+    this.relayCode = null;
     for (const c of this.list) try { c.close(); } catch (e) {}
     this.list = [];
     if (this.conn || this.peer) { try { this.conn && this.conn.close(); } catch (e) {} try { this.peer && this.peer.destroy(); } catch (e) {} }
@@ -1936,14 +2081,31 @@ const Watch = {
       const c = this.conn = peer.connect(NET.PREFIX + code, {reliable: true, metadata: {role: "watch"}});
       c.on("open", () => { NET.status("已連線，觀戰中"); $("netWaitTxt").textContent = "觀戰中：等待房主開始對戰…"; $("netWaitBack").hidden = false; UI.show("netWait"); });
       c.on("data", m => this.recv(m));
-      const lost = () => { if (this.conn !== c) return; this.conn = null; const was = G.spectate; G.spectate = false; $("watchBadge").hidden = true;
+      const lost = () => { if (this.conn !== c || this.relayCode) return; this.conn = null; const was = G.spectate; G.spectate = false; $("watchBadge").hidden = true;
         if (G.phase !== "over" || !was) alertBox("房主已離線，觀戰結束。"); };
       c.on("close", lost); c.on("error", lost);
     });
-    peer.on("error", e => NET.status(e.type === "peer-unavailable" ? "找不到這個房號（房主要先開著畫面）" : "連線錯誤：" + (e.type || e.message), true));
+    peer.on("error", e => NET.status(e.type === "peer-unavailable" ? "找不到這個房號（房主要先開著畫面）" : NET.errText(e), true));
+    // 點對點 7 秒沒收到畫面 → 改用中繼觀戰
+    this.gotView = false;
+    this.wfT = setTimeout(() => this.joinRelay(code), window.RCB_FORCE_RELAY ? 10 : 7000);
+  },
+  joinRelay(code) {
+    if (this.gotView) return;
+    NET.status("直接連線不通，改用中繼伺服器觀戰…");
+    Relay.connect().then(cli => {
+      if (!cli || this.gotView) { if (!cli) NET.status("連不上中繼伺服器，請確認網路後再試一次。", true); return; }
+      this.relayCode = code; let last = Date.now();
+      Relay.listen(code, "w", v => { last = Date.now(); if (this.conn) { try { this.conn.close(); } catch (e) {} this.conn = null; } this.recv(v); });
+      const ask = () => { Relay.pub(code, "h", {watch: 1});
+        if (Date.now() - last > 30000 && G.spectate && G.phase !== "over") { clearInterval(this.wT); G.spectate = false; $("watchBadge").hidden = true; alertBox("房主已離線，觀戰結束。"); } };
+      ask(); clearInterval(this.wT); this.wT = setInterval(ask, 20000);   // 每 20 秒提醒房主「還有人在看」
+      $("netWaitTxt").textContent = "觀戰中（中繼模式）：等待房主的畫面…"; $("netWaitBack").hidden = false; UI.show("netWait");
+    });
   },
   recv(v) {
     if (!v || v.t !== "view") return;
+    this.gotView = true;
     if (v.sc !== "battle") {
       if (G.spectate && G.phase !== "over") { G.spectate = false; $("watchBadge").hidden = true; }
       if (!G.spectate) { $("netWaitTxt").textContent = "觀戰中：" + (v.msg || "等待開始…"); $("netWaitBack").hidden = false; if ($("netWait").hidden) UI.show("netWait"); }
@@ -2347,11 +2509,13 @@ $("btnConfirm").onclick = () => {
 };
 $("btnRematch").onclick = () => { if (NET.on) { NET.status(""); return; } UI.show(null); startBattle(); };
 $("btnOverHome").onclick = $("btnHome").onclick = () => { NET.close(); Watch.stop(); if (G.tut) Tut.quit(true); G.scene = "title"; UI.hideDuel(); UI.show("title"); };
-const IN_CLAUDE = !!(window.claude && typeof window.claude.use === "function");
+const IN_CLAUDE = !!(window.claude && typeof window.claude.use === "function") || /claude(usercontent)?\.(ai|com)$/.test(location.hostname)
+  || (window.top !== window && /claude\.ai/.test(document.referrer));
+const SITE_URL = "https://mchpoker619.github.io/reverse-coin-battle/" + (/2D/.test(document.title) ? "2d/" : "3d/");
 if (IN_CLAUDE) { $("btnOnline").textContent = "線上對戰（請用網站版）"; }
 $("btnOnline").onclick = () => {
   if (IN_CLAUDE) { $("netHostBox").hidden = true; UI.show("netOv"); $("netCreate").disabled = $("netJoin").disabled = true;
-    return NET.status("claude.ai 分享頁不支援點對點連線。線上對戰請開「網站版」網址（放在 Netlify 等網站上的版本）。", true); } $("netHostBox").hidden = true; NET.status(NET.available() ? "" : "線上對戰需要網路（載入連線元件中…）"); UI.show("netOv"); };
+    return NET.status("claude.ai 分享頁不支援線上連線。線上對戰、觀戰請用 Safari 或 Chrome 打開網站版：" + SITE_URL, true); } $("netHostBox").hidden = true; NET.status(NET.available() ? "" : "線上對戰需要網路（載入連線元件中…）"); UI.show("netOv"); };
 $("netCreate").onclick = () => NET.host();
 $("netJoin").onclick = () => NET.join($("netJoinCode").value);
 $("netWatch").onclick = () => Watch.join($("netJoinCode").value);
@@ -2433,5 +2597,5 @@ G.players[0].camp = "X"; G.players[1].camp = "O";
 G.players[0].team = PRESETS[0][1].slice(); G.players[1].team = PRESETS[1][1].slice();
 G.pieces = []; G.players.forEach((pl, t) => { pl.side = pl.camp === "O" ? "top" : "bottom"; const z = -H/2 + START_Y[pl.side]*H; pl.team.forEach((id, k) => G.pieces.push(makePiece(BY_ID[id], t, pl.camp, -W/2 + START_X[k]*W, z, pl.side === "bottom" ? 0 : Math.PI))); });
 GFX.buildPieces(); GFX.cam.tTheta = 0.5;
-window.__RCB = {CTRL, Tut, Watch, Report, Haptic, SFX, predictPath, accErr, perfZone, G, P, RULES, physics, collide, railBounce, startResolve, applyResults, afterResults, startBattle, beginTurn, update, placeValid, place, confirmSelect, confirmAim, lockPower, lockAcc, newPlayer, PRESETS, BY_ID, COINS, R, W, H, UI, GFX, pval, skipDuel};
+window.__RCB = {Relay, CTRL, Tut, Watch, Report, Haptic, SFX, predictPath, accErr, perfZone, G, P, RULES, physics, collide, railBounce, startResolve, applyResults, afterResults, startBattle, beginTurn, update, placeValid, place, confirmSelect, confirmAim, lockPower, lockAcc, newPlayer, PRESETS, BY_ID, COINS, R, W, H, UI, GFX, pval, skipDuel};
 </script>

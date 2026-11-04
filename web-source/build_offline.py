@@ -50,6 +50,10 @@ PEER_TAG = '<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.m
 assert PEER_TAG in src
 PEERJS = open(os.path.join(HERE, 'peerjs.min.js'), encoding='utf-8').read().replace('</script>', '<\\/script>')
 src = src.replace(PEER_TAG, '<script>' + PEERJS + '</script>')
+MQTT_TAG = '<script src="https://cdn.jsdelivr.net/npm/mqtt@5.10.1/dist/mqtt.min.js"></script>'
+assert MQTT_TAG in src
+MQTTJS = open(os.path.join(HERE, 'mqtt.min.js'), encoding='utf-8').read().replace('</script>', '<\\/script>')
+src = src.replace(MQTT_TAG, '<script>' + MQTTJS + '</script>')
 src = src.replace(cdn, '<script>' + three + '</script>\n<script>' + assets_js + '</script>\n<script>@@SOUND@@</script>')
 # 網頁版（claude.ai 發布用：內建官方圖片＋音效，不含 <html>/<head> 外框，左右留 16px）
 web = src.replace('@@SOUND@@', sound_embed_js)
