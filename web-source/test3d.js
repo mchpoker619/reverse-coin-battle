@@ -72,7 +72,7 @@ fs.mkdirSync(OUT, { recursive: true });
     let w = wall(12, 0); out.push([!w.out && w.vx < 0 && w.spotSpeed < X.P.UNLOCK, '邊框 慢 → 只反彈', [w.out, w.vx.toFixed(1)]]);
     w = wall(23, 0); out.push([!w.out && w.vx < 0 && w.spotSrc === 'rail', '邊框 弱點朝牆 中速 → 反彈＋翻轉', [w.out, w.spotSpeed.toFixed(1)]]);
     w = wall(23, Math.PI/2); out.push([!w.out && w.spotSpeed < X.P.UNLOCK, '邊框 非弱點朝牆 中速 → 只反彈', w.out]);
-    w = wall(36, 0); out.push([w.out, '邊框 快 → 出界', w.out]);
+    w = wall(X.P.OUT_SPEED * 1.15, 0); out.push([w.out, '邊框 快 → 出界', w.out]);
     // 撞球
     const a = G.pieces[0], b = G.pieces[3]; a.alive = b.alive = true; a.out = b.out = false;
     a.x = -2*X.R + 0.01; a.z = 0; b.x = 0; b.z = 0; a.vx = 36; a.vz = 0; b.vx = b.vz = 0;

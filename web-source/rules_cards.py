@@ -8,7 +8,7 @@ def coin(x, y, r=17, camp='O', label='', tab=0, spot=False, ring=None):
     if spot:
         import math
         for base in (tab, tab + 180):
-            a0, a1 = math.radians(base - 13.44), math.radians(base + 13.44)
+            a0, a1 = math.radians(base - 14.112), math.radians(base + 14.112)
             rr = r + 6
             x0, y0, x1, y1 = x + rr * math.cos(a0), y + rr * math.sin(a0), x + rr * math.cos(a1), y + rr * math.sin(a1)
             out.append(f'<path d="M{x0:.1f} {y0:.1f} A{rr} {rr} 0 0 1 {x1:.1f} {y1:.1f}" stroke="{RD}" stroke-width="6" fill="none" stroke-linecap="round"/>')
@@ -55,7 +55,7 @@ def card(title, svg, cap):
 # 1 組隊
 card('① 組隊', coin(55, 62, camp='O', label='7000') + coin(120, 62, camp='O', label='5000') + coin(185, 62, camp='O', label='3000')
      + text(120, 112, '合計 15,000 ≤ 15,000', GR, 15) + text(120, 134, 'メタ幣算 M 值＝（正＋反）÷2', DIM, 11),
-     '每方 1～3 枚、同一隊不可重複，M 值合計不能超過 15,000。')
+     '每方一定要 3 枚、同一隊不可重複，M 值合計不能超過 15,000。')
 # 2 陣營
 card('② 猜拳選陣營、擲金幣先攻',
      text(46, 66, '✊', WH, 34) + text(46, 90, '猜拳', DIM, 11) + arrow(70, 58, 96, 58, V, 3)
@@ -88,7 +88,7 @@ card('⑤ 旋轉（可在開場關閉）',
 # 6 弱點
 card('⑥ リバースポット（弱點）',
      coin(120, 75, 30, 'O', '', 0, spot=True) + arrow(208, 75, 160, 75, CY, 4) + text(200, 60, '打這裡', CY, 12)
-     + text(40, 42, '開關側', RD, 12) + text(40, 112, '和正對面', RD, 12) + text(40, 128, '各 ±13°', DIM, 11),
+     + text(40, 42, '開關側', RD, 12) + text(40, 112, '和正對面', RD, 12) + text(40, 128, '各 ±14°', DIM, 11),
      '開關（小突起）那一側和正對面是弱點。用力打中 → 金幣彈起翻面；打其他地方再大力也不會翻。')
 # 7 翻面判定
 card('⑦ 彈起後：顏色決定',
