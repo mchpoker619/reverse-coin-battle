@@ -233,7 +233,7 @@ const GFX = (() => {
     }
 
     // 回場放置
-    if (battle && ph === "place" && !cur().cpu && G.placeQueue.length && mouse.ok) {
+    if (battle && ph === "place" && !locked() && G.placeQueue.length && mouse.ok) {
       const p = G.placeQueue[0];
       drawCoin(p, mouse.x, mouse.z, {alpha: 0.6, rot: p.home + (G.placeRot || 0)});
       ring(mouse.x, mouse.z, 2 * R, placeValid(mouse.x, mouse.z, p) ? "#4ade80" : "#f87171", 0.18 * k);

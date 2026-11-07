@@ -120,7 +120,7 @@ card('⑪ 防守方被撞出界',
      f'<rect x="20" y="14" width="140" height="122" rx="6" fill="none" stroke="#6b4a2e" stroke-width="6"/>'
      + coin(196, 40, 13, 'O') + arrow(182, 52, 120, 92, GR, 3, '5 4') + f'<circle cx="104" cy="104" r="30" fill="none" stroke="{GR}" stroke-width="2" stroke-dasharray="4 3"/>'
      + coin(104, 104, 13, 'O') + text(196, 76, '沒翻面', DIM, 11) + text(196, 92, '＝存活', GR, 12) + text(196, 120, '攻擊方', WH, 11) + text(196, 136, '放回場內', WH, 11),
-     '沒翻面的防守方存活，由攻擊方放回場內（離其他金幣至少 1 枚遠，Q／E 轉方向）。')
+     '沒彈起的金幣 Safe，由主人放回場內任何位置（離其他金幣至少 1 枚，方向可調整）。')
 # 12 自滅
 card('⑫ 自滅（攻擊方）',
      f'<rect x="150" y="14" width="12" height="122" rx="3" fill="#6b4a2e"/>'

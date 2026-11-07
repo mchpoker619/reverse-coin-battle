@@ -31,7 +31,7 @@ fs.mkdirSync(OUT, { recursive: true });
   // ---- 規則邏輯（端到端：真實出手）
   const res = await page.evaluate(async () => {
     const X = window.__RCB, G = X.G, out = [];
-    const run = (name, att, def, flip, hitSpot, expectAlive, expectLog, pow = 0.75) => {
+    const run = (name, att, def, flip, hitSpot, expectAlive, expectLog, pow = 0.75, shooterSpot = false, stopAt = []) => {
       X.P.FLIP = flip;
       G.players = [X.newPlayer('攻'), X.newPlayer('守')];
       G.players[0].camp = 'X'; G.players[1].camp = 'O';
@@ -39,9 +39,9 @@ fs.mkdirSync(OUT, { recursive: true });
       G.firstCamp = 'X'; X.startBattle();
       const S = G.pieces[0], D = G.pieces[3];
       G.pieces.filter(p => p !== S && p !== D).forEach((p, k) => { p.x = -X.W/2 + X.R + 0.2 + k * 2.2 * X.R; p.z = X.H/2 - X.R - 0.2; });
-      D.x = 0; D.z = 0; D.angle = hitSpot ? 0 : Math.PI/2; S.x = -10.3; S.z = 0;
+      D.x = 0; D.z = 0; D.angle = hitSpot ? 0 : Math.PI/2; S.x = -10.3; S.z = 0; S.angle = shooterSpot ? 0 : Math.PI/2;   // 測試是橫向出手：預設讓攻擊方弱點不在正前方
       G.selected = S; X.confirmSelect(); G.aim = 0; X.confirmAim(); G.power = pow; X.lockPower(); G.acc = 0; X.lockAcc();
-      for (let i = 0; i < 60*30; i++) { X.update(1/60); if (G.phase === 'duel') X.skipDuel(); if (['select','over','place'].includes(G.phase)) break; }
+      for (let i = 0; i < 60*30; i++) { X.update(1/60); if (G.phase === 'duel') X.skipDuel(); if (['select','over','place', ...stopAt].includes(G.phase)) break; }
       const log = G.log.map(l => l[0]).filter(s => !s.includes('出手') && !s.includes('擲金幣')).join(' / ');
       out.push([D.alive === expectAlive && log.includes(expectLog), name, log]);
     };
@@ -52,17 +52,34 @@ fs.mkdirSync(OUT, { recursive: true });
     run('E 官方例：守レオウ白8000 被 5000 打彈起 → 翻面 4000 淘汰', 'v1x-r', 'v3o-br', 0, true, false, 'OX 4000 < 5000');
     run('E2 守カイザーク(白4000/黑8000) 站白面被打彈起 → 翻面 8000 強，存活', 'v1x-r', 'v3x-br', 0, true, true, 'OX 8000 ≥ 5000');
     run('F 翻成對方色 → 直接淘汰', 'v4x-c-sai', 'v4o-br', 1, true, false, '翻成對方顏色 → 淘汰');
-    run('G 沒打到弱點 → 不比 OX', 'v4x-br', 'v4o-c-iru', 0, false, true, '沒翻面 → 存活');
+    run('G 沒打到弱點 → 不比 OX', 'v4x-br', 'v4o-c-iru', 0, false, true, '仍在裝填狀態 → Safe');
     // 存活的彈起金幣放回原位
-    run('H 守方 OX 存活（留在場內）', 'v1x-r', 'v3x-br', 0, true, true, '存活', 0.42);
-    { const D = G.pieces[3]; out.push([D.alive && !D.out && Math.hypot(D.x, D.z) > 0.5, 'H2 存活守方留在停下的位置（判定助手 D6）', [D.x.toFixed(2), D.z.toFixed(2)]]); }
+    run('H 守方 OX 存活（留在場內）', 'v1x-r', 'v3x-br', 0, true, true, '存活', 0.42, false, ['orient']);
+    { const D = G.pieces[3]; out.push([D.alive && !D.out && Math.hypot(D.x, D.z) <= 2*X.R, 'H2 香港規則：Safe 放回撞擊前的位置（被佔用則緊貼旁邊）', [D.x.toFixed(2), D.z.toFixed(2)]]);
+      out.push([G.phase === 'orient' && X.actor() === G.players[1] && G.orientQueue[0] === D, 'H3 香港規則：重新放置的方向由金幣主人（防守方）決定', [G.phase, X.actor() && X.actor().name]]);
+      const lockedForAttacker = (() => { G.players[1].remote = true; const v = X.locked(); G.players[1].remote = false; return v; })();
+      out.push([lockedForAttacker, 'H4 防守方在別台裝置時，攻擊方這邊不能操作重新放置', lockedForAttacker]); }
+    // 香港規則 p.9：同時解除狀態
+    run('K 同時解除＋雙方都變色 → 雙方 Safe', 'v4x-br', 'v4o-c-iru', 1, true, true, '雙方都變色', 0.75, true);
+    out.push([G.pieces[0].alive, 'K2 攻擊方也 Safe', '']);
+    run('K3 同時解除＋都沒變色 → 雙方 Safe（不比 OX）', 'v4x-br', 'v4o-c-iru', 0, true, true, '雙方都沒變色', 0.75, true);
+    out.push([G.pieces[0].alive && !G.log.some(l => l[0].includes('OX 2000')), 'K4 沒有比 OX', '']);
+    // 規則模式
+    X.setRule('standard'); out.push([X.teamMax() === 1 && X.matchTime() === 300, 'M1 標準 1V1：每方 1 枚、5 分鐘', [X.teamMax(), X.matchTime()]]);
+    X.setRule('easy'); out.push([X.teamMax() === 1 && X.matchTime() === 300, 'M2 簡易 1V1：每方 1 枚、5 分鐘', [X.teamMax(), X.matchTime()]]);
+    X.setRule('official'); out.push([X.teamMax() === 3 && X.matchTime() === 480, 'M3 專業 3V3：每方 3 枚、8 分鐘', [X.teamMax(), X.matchTime()]]);
+    { G.players = [X.newPlayer('甲'), X.newPlayer('乙')]; G.players[0].camp = 'X'; G.players[1].camp = 'O'; G.players[0].team = X.PRESETS[0][1].slice(); G.players[1].team = X.PRESETS[1][1].slice(); G.firstCamp = 'X'; X.startBattle();
+      const a = G.pieces.filter(p => p.team === 0), b = G.pieces.filter(p => p.team === 1);
+      const gap = (Math.abs(a[1].x - a[0].x) - 2*X.R) / (2*X.R), opp = (Math.abs(a[1].z - b[1].z) - 2*X.R) / (2*X.R);
+      out.push([Math.abs(gap - 1) < 0.01 && Math.abs(opp - 6) < 0.01, 'M4 擺放：自己間隔 1 枚、與對手間隔 6 枚', [gap.toFixed(2), opp.toFixed(2)]]); }
+
     // isn_ver.1：攻擊方翻成對方色不淘汰
     X.RULES.mode = 'house';
-    run('I isn_ver.1 攻擊方翻成對方色不淘汰', 'v4x-br', 'v4o-c-iru', 1, true, false, '攻擊方不淘汰');
+    run('I isn_ver.1 攻擊方翻成對方色不淘汰', 'v4x-br', 'v4o-c-iru', 1, false, true, '攻擊方不淘汰', 0.75, true);
     out.push([G.pieces[0].alive, 'I2 攻擊方仍存活（isn_ver.1）', '']);
     // 官方：攻擊方自爆翻色 → OUT
     X.RULES.mode = 'official';
-    run('J 官方 攻擊方自爆翻成對方色 → OUT', 'v4x-br', 'v4o-c-iru', 1, true, false, '自爆翻成對方顏色 → 淘汰');
+    run('J 官方 攻擊方自爆翻成對方色 → OUT', 'v4x-br', 'v4o-c-iru', 1, false, true, '自爆翻成對方顏色 → 淘汰', 0.75, true);
     out.push([!G.pieces[0].alive, 'J2 攻擊方被淘汰（官方）', '']);
     X.RULES.mode = 'house';
     X.P.FLIP = 0.5;
@@ -73,9 +90,10 @@ fs.mkdirSync(OUT, { recursive: true });
     w = wall(23, 0); out.push([!w.out && w.vx < 0 && w.spotSrc === 'rail', '邊框 弱點朝牆 中速 → 反彈＋翻轉', [w.out, w.spotSpeed.toFixed(1)]]);
     w = wall(23, Math.PI/2); out.push([!w.out && w.spotSpeed < X.P.UNLOCK, '邊框 非弱點朝牆 中速 → 只反彈', w.out]);
     w = wall(X.P.OUT_SPEED * 1.15, 0); out.push([w.out, '邊框 快 → 出界', w.out]);
+    X.setNoOut(true); w = wall(X.P.OUT_SPEED * 1.15, 0); out.push([!w.out && w.vx < 0, '出界開關：關 → 同樣速度也不會出界（反彈）', w.out]); X.setNoOut(false);
     // 撞球
     const a = G.pieces[0], b = G.pieces[3]; a.alive = b.alive = true; a.out = b.out = false;
-    a.x = -2*X.R + 0.01; a.z = 0; b.x = 0; b.z = 0; a.vx = 36; a.vz = 0; b.vx = b.vz = 0;
+    a.x = -2*X.R + 0.01; a.z = 0; b.x = 0; b.z = 0; a.vx = 36; a.vz = 0; b.vx = b.vz = 0; G.shooter = null;
     X.collide(a, b); out.push([Math.abs(a.vx) < 2 && b.vx > 34 && a.spin === 0 && b.spin === 0, '正面撞擊 母球停（無旋轉不帶轉）', [a.vx.toFixed(2), b.vx.toFixed(2)]]);
     // 旋轉：母球右旋正面撞 → 目標反向轉＋被帶偏
     a.x = -2*X.R + 0.01; a.z = 0; b.x = 0; b.z = 0; a.vx = 36; a.vz = 0; b.vx = b.vz = 0; a.spin = 20; b.spin = 0;
