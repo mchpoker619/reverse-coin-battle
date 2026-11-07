@@ -78,6 +78,28 @@ ACC_CURVE = 400.0 * LEN_S                       # 精準度偏差造成的側向
 MISS_MIN = 5 / 70                       # 沒按進 PERFECT 區至少偏 5°
 AIM_COL, TGT_COL, CUT_COL = (24, 224, 255), (255, 138, 0), (125, 255, 58)   # 輔助線：青／橘／綠
 PERFECT = 0.07
+FIELD_SIZE = "A2"                       # 場地大小：開局前在「開始遊戲」選 A2／A3，對戰中不能改
+
+
+def set_field(size):
+    """A2＝420×594 mm（官方 A3 等比例放大 √2）；A3＝297×420 mm（官方バリ場原尺寸）。
+    場地在畫面上一樣大：換算 mm→px 比例，金幣與所有速度／加速度等比例換算，擺放距離（mm）不變。"""
+    global FIELD_SIZE, FIELD_W_MM, FIELD_H_MM, MM, LEN_S, R, START_X, START_Y
+    global OUT_SPEED, FRICTION, VMIN, VMAX, UNLOCK_RAIL, UNLOCK_SPEED, ACC_CURVE
+    FIELD_SIZE = "A3" if size == "A3" else "A2"
+    FIELD_W_MM, FIELD_H_MM = (297, 420) if FIELD_SIZE == "A3" else (420, 594)
+    MM = 1.65 * 297 / FIELD_W_MM
+    LEN_S = MM / 1.65
+    R = round(COIN_MM * MM / 2)
+    START_X = (0.5 - 86 / FIELD_W_MM, 0.5, 0.5 + 86 / FIELD_W_MM)
+    START_Y = {"top": 0.5 - 150.5 / FIELD_H_MM, "bottom": 0.5 + 150.5 / FIELD_H_MM}
+    OUT_SPEED, FRICTION = 672.75 * LEN_S, 669.5 * LEN_S
+    VMIN, VMAX = 290.0 * LEN_S, 1386.0 * LEN_S
+    UNLOCK_RAIL, UNLOCK_SPEED = 322.0 * LEN_S, 296.24 * LEN_S
+    ACC_CURVE = 400.0 * LEN_S
+
+
+set_field(FIELD_SIZE)
 SPIN_COL = (255, 79, 216)               # 旋轉指示（洋紅）
 
 
@@ -368,11 +390,15 @@ class Game:
         back = Button((cx - 160, 680, 320, 52), "← 返回", lambda: self.goto_title("main"), size=22)
         if page == "play":
             self.buttons = [
+                Button((cx - 160, 422, 155, 46), "場地：A2", lambda: self.pick_field("A2"), size=19,
+                       color=(78, 52, 150) if FIELD_SIZE == "A2" else None),
+                Button((cx + 5, 422, 155, 46), "場地：A3", lambda: self.pick_field("A3"), size=19,
+                       color=(78, 52, 150) if FIELD_SIZE == "A3" else None),
                 Button((cx - 160, 360, 320, 52), {"official": "規則：專業 3V3（8 分鐘）", "standard": "規則：標準 1V1（5 分鐘）",
                                                   "easy": "規則：簡易 1V1（5 分鐘）"}[RULE_MODE] + "　點一下切換",
                        self.toggle_easy, size=18, color=(40, 80, 60) if RULE_MODE != "official" else None),
-                Button((cx - 160, 428, 320, 66), "雙人對戰（同一台電腦）", lambda: self.start_match(False), size=24),
-                Button((cx - 160, 506, 320, 66), f"對戰電腦（{CPU_NAME[CPU_LEVEL]}）", lambda: self.start_match(True), size=24),
+                Button((cx - 160, 484, 320, 60), "雙人對戰（同一台電腦）", lambda: self.start_match(False), size=24),
+                Button((cx - 160, 556, 320, 60), f"對戰電腦（{CPU_NAME[CPU_LEVEL]}）", lambda: self.start_match(True), size=24),
                 back]
         elif page == "set":
             self.buttons = [
@@ -434,6 +460,11 @@ class Game:
         order = ["easy", "normal", "hard", "god"]
         CPU_LEVEL = order[(order.index(CPU_LEVEL) + 1) % 4]
         self.goto_title()
+
+    def pick_field(self, size):
+        if self.scene == "title":                        # 只有開局前（主選單）能選，對戰中沒有這個按鈕
+            set_field(size)
+            self.goto_title()
 
     def title_sound(self):
         self.toggle_sound()
@@ -1480,6 +1511,8 @@ class Game:
         text(s, "Reverse Coin Battle｜逆転バリバリバース 2D 對戰", (SW // 2, 240), 26, COL["dim"], "center")
         text(s, "官方說明書 Ver.1.1.2 エキスパートルール・全 101 枚金幣", (SW // 2, 284), 22, COL["dim"], "center")
         text(s, WATERMARK, (SW // 2, 322), 22, (255, 107, 125), "center", True)
+        if getattr(self, "title_page", "main") == "play":
+            text(s, "場地：A2 420×594 mm／A3 297×420 mm（官方圖紙原尺寸），開局前選定，對戰中不能更改", (SW // 2, 642), 16, COL["dim"], "center")
         self.draw_coin_at(Vector2(SW // 2 - 380, 150), "O", BY_ID["v1o-bbr"], 1.4, 0)
         self.draw_coin_at(Vector2(SW // 2 + 380, 150), "X", BY_ID["v1x-bbr"], 1.4, math.pi)
 
