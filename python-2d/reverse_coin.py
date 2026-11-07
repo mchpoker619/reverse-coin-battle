@@ -25,8 +25,9 @@ FIELD.center = (420, 418)
 PANEL_X = 830
 R = round(COIN_MM * MM / 2)             # 金幣半徑（px）
 # 官方圖紙上的開場圓圈位置（以場地寬高比例表示）：上方 ORDER（白）、下方 XTREME（黑），約相距 6 枚金幣
-START_X = (0.1816, 0.4983, 0.8150)
-START_Y = {"top": 0.1240, "bottom": 0.8725}
+# 香港大賽規則：自己的金幣直線間隔 1 枚、與對手間隔 6 枚
+START_X = (0.5 - 86 / 297, 0.5, 0.5 + 86 / 297)
+START_Y = {"top": 0.5 - 150.5 / 420, "bottom": 0.5 + 150.5 / 420}
 # 撞球檯式邊框：碰到邊框時，垂直於邊框的速度 ≥ OUT_SPEED 才會飛出場外，否則回彈
 RAIL = 16                               # 邊框厚度（px）
 OUT_SPEED = 672.75                       # 飛出邊框的門檻速度（px/s），一定要大於翻轉門檻 UNLOCK_SPEED
@@ -37,11 +38,17 @@ CPU_LEVEL = "normal"                    # 電腦強度：easy 簡單／normal �
 CPU_NAME = {"easy": "簡單", "normal": "普通", "hard": "強者", "god": "硬幣之神"}
 CPU_CFG = {"easy": (0.14, 0.55, 0.3), "normal": (0.05, 0.22, 1.0), "hard": (0.025, 0.07, 1.0), "god": (0.02, 0.05, 1.0)}   # 力量誤差、精準度誤差、瞄弱點
 SLING_MODE = True                       # 操作模式：True＝彈弓式（後拉放開），False＝點選式（點方向 → 力量條 → 精準度）；對戰中可隨時切換（V 鍵）
+RULE_MODE = "official"                  # official 專業 3V3／standard 標準 1V1（有 OX）／easy 簡易 1V1（不比 OX）
+NO_OUT = False                          # 出界開關：True＝撞框一律反彈、不會出界
 EASY_MODE = False                       # 簡易規則 EASY 1V1：每方 1 枚，彈起沒變色直接 Safe（不比 OX）；開場畫面可切換
 
 
 def team_max():
-    return 1 if EASY_MODE else 3
+    return 1 if RULE_MODE in ("easy", "standard") else 3
+
+
+def match_time():
+    return 300.0 if RULE_MODE in ("easy", "standard") else MATCH_TIME   # 簡易／標準 5 分鐘、專業 8 分鐘
 DUEL_TIME = 2.4                         # 每張 OX 對決畫面顯示秒數
 FLIP_CHANCE = 0.5                       # 彈起翻轉後落地換成對方顏色的機率（正反各 1/2）
 FRICTION = 669.5                        # 滑行減速 px/s²（場地摩擦 +3%，原 650）
@@ -361,8 +368,10 @@ class Game:
             Button((cx - 160, 504, 155, 60), "旋轉：開" if SPIN_ON else "旋轉：關", self.toggle_spin,
                    size=20, color=(75, 40, 95) if SPIN_ON else None),
             Button((cx + 5, 504, 155, 60), "操作：彈弓式" if SLING_MODE else "操作：點選式", self.toggle_ctrl_title, size=20),
-            Button((cx - 160, 576, 320, 60), "規則：簡易 EASY 1V1" if EASY_MODE else "規則：官方 3V3（OX 對決）", self.toggle_easy,
-                   size=20, color=(40, 80, 60) if EASY_MODE else None),
+            Button((cx - 160, 576, 196, 60), {"official": "規則：專業 3V3", "standard": "規則：標準 1V1", "easy": "規則：簡易 1V1"}[RULE_MODE],
+                   self.toggle_easy, size=19, color=(40, 80, 60) if RULE_MODE != "official" else None),
+            Button((cx + 44, 576, 116, 60), "出界：關" if NO_OUT else "出界：開", self.toggle_out, size=17,
+                   color=(40, 70, 100) if NO_OUT else None),
             Button((cx - 160, 648, 155, 60), "規則說明", self.goto_rules, size=22),
             Button((cx + 5, 648, 155, 60), "離開", self.quit, size=22),
         ]
@@ -391,8 +400,15 @@ class Game:
         return self._title_bg
 
     def toggle_easy(self):
-        global EASY_MODE
-        EASY_MODE = not EASY_MODE
+        global EASY_MODE, RULE_MODE
+        order = ["official", "standard", "easy"]
+        RULE_MODE = order[(order.index(RULE_MODE) + 1) % 3]
+        EASY_MODE = RULE_MODE == "easy"
+        self.goto_title()
+
+    def toggle_out(self):
+        global NO_OUT
+        NO_OUT = not NO_OUT
         self.goto_title()
 
     def cycle_cpu(self):
@@ -638,7 +654,7 @@ class Game:
                 self.pieces.append(Piece(BY_ID[cid], t, p.camp, (x, y), ang))
         self.turn = 0 if self.players[0].camp == self.first_camp else 1
         self.log = [f"擲金幣：{CAMP_ZH[self.first_camp]} 先攻"]
-        self.match_t, self.time_result = MATCH_TIME, None
+        self.match_t, self.time_result = match_time(), None
         self.winner = None
         self.begin_turn()
 
@@ -659,6 +675,13 @@ class Game:
         self.cpu_plan = None
         self.result_lines = []
         self.turn_t, self.pull = TURN_TIME, None
+
+    def actor(self):
+        """重新放置（orient）／放回場內（place）由那枚金幣的主人操作，其他階段是輪到的人。"""
+        q = self.orient_queue if self.phase == "orient" else self.place_queue if self.phase == "place" else None
+        if q:
+            return self.players[q[0].team]
+        return self.cur()
 
     def cur(self):
         return self.players[self.turn]
@@ -810,7 +833,7 @@ class Game:
                 continue
             self.sfx.play("rail_hit", vn / 500)
             gs = getattr(self, "god_shot", None)
-            if vn >= OUT_SPEED and not (gs and p.team == gs[1]):            # 神之一擊：自己不出界
+            if vn >= OUT_SPEED and not NO_OUT and not (gs and p.team == gs[1]):            # 神之一擊：自己不出界
                 p.out = True
                 p.vel *= 0.55          # 飛越邊框損失速度
                 return
@@ -874,8 +897,30 @@ class Game:
             self.add_log("沒碰到任何金幣 → 無效攻擊，原地重新鎖定")
         elif self.shooter_hit and not any(p.unlocked or p.out for p in self.pieces if p.alive):
             self.add_log("有碰撞但沒打中リバースポット → 沒有翻轉，比賽繼續")
+        # 香港規則 p.9：攻擊方自己和對手同時解除狀態 → 都變色＝雙方 Safe；只有一方變色＝那一方 OUT；都沒變色＝雙方 Safe
+        defs = [p for p in self.pieces if p.alive and p.team != A and p.unlocked]
+        if OFFICIAL_RULES and S.alive and S.unlocked and not S.out and defs:
+            any_def = any(d.flipped for d in defs)
+            self.add_log("雙方同時解除狀態 → " + ("雙方都變色" if S.flipped and any_def else "只有攻擊方變色" if S.flipped
+                                                 else "只有防守方變色" if any_def else "雙方都沒變色"))
+            for d in defs:
+                if d.flipped and not S.flipped:
+                    self.eliminate(d, "同時解除、只有它變色 → 淘汰")
+                    self.events.append(("flip", S, d, False))
+                else:
+                    self.add_log(f"存活｜{d.coin.jp} 同時解除 → Safe")
+                    if d.out:
+                        self.place_queue.append(d)
+                    else:
+                        d.return_prev = True
+                    d.done = True
+            if S.flipped and not any_def:
+                self.eliminate(S, "同時解除、只有攻擊方變色 → 淘汰（自滅）")
+            else:
+                S.return_prev = True
+            S.done = True
         for p in list(self.pieces):
-            if not p.alive:
+            if not p.alive or getattr(p, "done", False):
                 continue
             if p.team == A:
                 # 攻擊方（官方 p.8～9）：自己回合自己的金幣出界＝自滅 OUT；自爆翻成對方顏色＝OUT；自爆仍是自己顏色＝セーフ放回原位
@@ -885,26 +930,28 @@ class Game:
                     if OFFICIAL_RULES:
                         self.eliminate(p, "攻擊方隊友被自己撞出界 → 淘汰（自滅）")
                     else:
-                        self.add_log(f"{p.coin.jp}（攻擊方隊友）被撞出界 → 不淘汰，由攻擊方安排回場")
+                        self.add_log(f"{p.coin.jp}（攻擊方隊友）被撞出界 → 不淘汰，由主人放回場內")
                         self.place_queue.append(p)
                 elif p.unlocked and p.flipped and OFFICIAL_RULES:
                     self.eliminate(p, "自爆翻成對方顏色 → 淘汰")
                 elif p.unlocked:
                     side = "翻成對方顏色 → 不淘汰（isn_ver.1）" if p.flipped else "仍是自己顏色 → セーフ"
-                    self.add_log(f"{p.coin.jp}（攻擊方）自爆{side}，原地重新鎖定")
-                    p.return_home = True
+                    self.add_log(f"{p.coin.jp}（攻擊方）自爆{side}，放回撞擊前的位置")
+                    p.return_prev = True
             else:
                 if not p.unlocked:
                     if p.out:
-                        self.add_log(f"存活｜{p.coin.jp} 被擊出界、沒翻面 → 存活，由攻擊方安排回場")
+                        self.add_log(f"存活｜{p.coin.jp} 被擊出界、仍在裝填狀態 → Safe，由 {self.players[p.team].name} 放回場內任何位置")
                         self.place_queue.append(p)
                 elif p.flipped:
                     self.eliminate(p, "翻成對方顏色 → 淘汰")
                     self.events.append(("flip", S, p, False))
-                elif EASY_MODE:
+                elif RULE_MODE == "easy":
                     self.add_log(f"存活｜{p.coin.jp} 彈起但沒變色 → 簡易規則直接 Safe")
                     if p.out:
                         self.place_queue.append(p)
+                    else:
+                        p.return_prev = True
                 else:
                     v = p.ox_after_pop
                     meta = f"（メタ幣核心翻面：{p.value}→{v}）" if p.coin.meta else ""
@@ -914,15 +961,17 @@ class Game:
                         if p.out:
                             self.place_queue.append(p)
                         else:
-                            p.return_home = True
+                            p.return_prev = True
                     else:
                         self.eliminate(p, f"仍是自己顏色，OX {v} < {S.value} → 淘汰{meta}")
                         self.events.append(("duel", S, p, False))
-        # 場內 Safe（彈起後存活、留在場內）→ 原地重新鎖定，弱點方向由攻擊方決定（判定助手 v3）
-        self.orient_queue = [p for p in self.pieces if p.alive and not p.out and p.unlocked]
-        # 彈起但セーフ：留在停下的位置，原地重新鎖定（判定助手 D6／A4）
+        # 香港規則：場內 Safe 由主人重新裝填、放回撞擊前的位置，方向自由（只能轉向、不能移動）
+        self.orient_queue = [p for p in self.pieces if p.alive and not p.out and getattr(p, "return_prev", False)]
+        for p in self.orient_queue:
+            self.return_to_prev(p)
+            p.flipped = False
         for p in self.pieces:
-            p.return_home = False
+            p.return_home = p.return_prev = p.done = False
         self.place_queue = [p for p in self.place_queue if p.alive]
         if self.events:
             self.phase, self.duel_t = "duel", 0.0          # 先播放 OX 對決／翻面畫面
@@ -974,8 +1023,9 @@ class Game:
     def orient_confirm(self, angle):
         p = self.orient_queue.pop(0)
         p.angle = angle
-        self.add_log(f"{p.coin.jp} 原地重新鎖定（方向由攻擊方決定）")
+        self.add_log(f"{p.coin.jp} 重新裝填，放回撞擊前的位置（方向由 {self.players[p.team].name} 決定）")
         if self.orient_queue:
+            self.cpu_timer, self.turn_t = 0.6, TURN_TIME
             return
         if self.place_queue:
             self.phase, self.cpu_timer, self.turn_t = "place", 0.6, TURN_TIME
@@ -991,6 +1041,8 @@ class Game:
         self.place_queue.pop(0)
         if not self.place_queue:
             self.end_turn()
+        else:
+            self.cpu_timer, self.turn_t = 0.6, TURN_TIME
 
     def check_win(self):
         a = [len(self.own_alive(t)) for t in (0, 1)]
@@ -1011,7 +1063,7 @@ class Game:
         """全場時間到：比開場隊伍的 M 值合計，少的一方獲勝（相同＝平手）。"""
         a, b = self.team_m(0), self.team_m(1)
         self.time_result = (a, b)
-        self.add_log(f"⏱ 全場 8 分鐘時間到 → 開場 M 值合計 {self.players[0].name} {a:,}／{self.players[1].name} {b:,}")
+        self.add_log(f"⏱ 全場 {int(match_time() // 60)} 分鐘時間到 → 開場 M 值合計 {self.players[0].name} {a:,}／{self.players[1].name} {b:,}")
         self.winner = -1 if a == b else (0 if a < b else 1)
         self.phase = "over"
         self.buttons = [
@@ -1108,7 +1160,9 @@ class Game:
                 self.lock_acc()
         elif ph == "orient" and self.cpu_timer <= 0:
             p = self.orient_queue[0]
-            self.orient_confirm(random.choice((math.pi / 2, -math.pi / 2)) if p.team == self.turn else 0.0)
+            foes = sorted((q for q in self.pieces if q.alive and not q.out and q.team != p.team), key=lambda q: q.pos.distance_to(p.pos))
+            d = (foes[0].pos - p.pos) if foes else Vector2(1, 0)
+            self.orient_confirm(math.atan2(d.y, d.x) + math.pi / 2)            # 弱點和對手方向垂直
             self.cpu_timer = 0.5
         elif ph == "place" and self.cpu_timer <= 0:
             p = self.place_queue[0]
@@ -1203,7 +1257,7 @@ class Game:
                 if k >= len(self.events):
                     self.after_results()
             return
-        if self.phase == "over" or self.cur().cpu:
+        if self.phase == "over" or self.actor().cpu:
             return
         click = e.type == pygame.MOUSEBUTTONDOWN and e.button == 1
         key = e.key if e.type == pygame.KEYDOWN else None
@@ -1340,7 +1394,7 @@ class Game:
             self.duel_t += dt
             if self.duel_t >= DUEL_TIME * len(self.events):
                 self.after_results()
-        if self.cur().cpu and self.phase not in ("moving", "jump", "over", "duel"):
+        if self.actor().cpu and self.phase not in ("moving", "jump", "over", "duel"):
             self.cpu_update(dt)
 
     # ============================================================ 繪圖
@@ -1384,18 +1438,20 @@ class Game:
                 y = 66 + (i // 4) * (ch + 10)
                 s.blit(img, (x, y))
             return
-        text(s, "規則說明（官方取扱説明書 Ver.1.1.2）", (60, 40), 40, COL["yel"], bold=True)
+        text(s, "規則說明（官方說明書 Ver.1.1.2＋香港大賽規則）", (60, 40), 40, COL["yel"], bold=True)
         lines = [
             "【賽前】先組隊：一定要 3 枚、同一隊不可重複，OX 合計 ≤ 15,000（メタ幣算 M 值）。再猜拳選陣營、擲金幣定先攻。",
             "【擊球】① 選金幣確定　② 滑鼠／←→ 決定方向（H 開關輔助線，關閉時用大三角箭頭）　③ 力量條　④ 精準度條",
             "　　　　精準度：中間綠區＝PERFECT 不偏；一離開就至少偏 5°，越靠邊越大，最邊緣左右各偏 70° 並帶弧線。",
             "【旋轉】出手前 Z 左旋／X 右旋（各 3 段）：金幣會轉、走弧線，撞到對手會傳遞旋轉並帶偏，撞邊框反彈角度改變；越強 PERFECT 綠區越窄。",
             "【翻轉】開關方向與正對面是リバースポット（紅色弧線）。力道夠強打中 → 彈起，落地正反面各 1/2。",
-            "【防守方】彈起翻成對方顏色 → OUT；彈起仍是自己顏色 → OX 對決，守 ≥ 攻 セーフ（平手守方勝），原地重新鎖定。",
-            "　　　　　被撞出界沒彈起 → 由攻擊方放回場上（離其他金幣 ≥ 1 枚，方向自由 Q／E）。",
+            "【防守方】彈起翻成對方顏色 → OUT；彈起仍是自己顏色 → OX 對決，守 ≥ 攻 セーフ（平手守方勝），由主人放回撞擊前的位置（只能轉方向、不能移動）。",
+            "　　　　　被撞出界但仍在裝填狀態 → Safe，由主人放回場內任何位置（離其他金幣 ≥ 1 枚，方向自由 Q／E）。",
+            "【同時解除】攻擊方和對手一起彈起：都變色或都沒變色 → 雙方 Safe；只有一方變色 → 那一方 OUT（香港大賽規則）。",
             "【メタ幣】被打到彈起時中央核心會翻面，OX 對決用翻面後的數值（例：レオウ白 8000 → 黑面 4000）。",
             "【自滅】自己回合自己的金幣出界（含被自己撞出去的隊友）→ OUT；自爆翻成對方顏色 → OUT。",
-            "　　　　自爆仍是自己顏色 → セーフ，原地重新鎖定。沒撞到任何金幣 → 無效攻擊。",
+            "　　　　自爆仍是自己顏色 → セーフ，放回撞擊前的位置。沒撞到任何金幣 → 無效攻擊。",
+            "【模式】專業 3V3（8 分鐘）／標準 1V1（5 分鐘、有 OX）／簡易 1V1（5 分鐘、不比 OX）；出界開關關閉時撞框一律反彈。",
             "【場地】官方 A3 バリ場 297×420 mm（上 ORDER 白／下 XTREME 黑），金幣直徑 43 mm。",
             "【邊框】撞球檯式：垂直撞擊 ≥ 出界門檻（517，必定大於翻轉門檻 322）才飛出界，否則減速反彈；弱點撞牆 ≥ 322 也會彈起。",
             "【勝利】淘汰對手全部金幣。（程式開頭 OFFICIAL_RULES = False 可改回 isn_ver.1 自訂規則）",
@@ -1403,7 +1459,7 @@ class Game:
         y = 110
         for ln in lines:
             text(s, ln, (60, y), 20, COL["text"] if ln.startswith("【") else COL["dim"])
-            y += 42
+            y += 38
 
     def draw_rps(self):
         s = self.screen
@@ -1568,8 +1624,8 @@ class Game:
     def draw_battle(self):
         s = self.screen
         self.draw_table()
-        pl = self.cur()
-        text(s, f"輪到：{pl.name}　{CAMP_ZH[pl.camp]}", (40, 18), 26,
+        pl = self.actor()
+        text(s, f"{'重新放置' if self.phase in ('orient', 'place') else '輪到'}：{pl.name}　{CAMP_ZH[pl.camp]}", (40, 18), 21 if self.phase in ("orient", "place") else 26,
              COL["white"] if pl.camp == "O" else COL["yel"], bold=True)
 
         aiming = self.phase in ("aim", "power", "accuracy")
@@ -1906,11 +1962,11 @@ class Game:
             "moving": "金幣滑行中…",
             "jump": "彈起翻轉判定中…",
             "duel": "OX 對決！（點擊／Space 跳過）",
-            "place": "攻擊方安排回場位置",
-            "orient": "攻擊方決定弱點方向：移動滑鼠轉向、點擊確定（Q／E 微調）",
+            "place": f"{self.actor().name} 放回場內：點任何空位，Q／E 轉向",
+            "orient": f"{self.actor().name}：原位只能轉方向、不能移動，點擊確定",
             "over": "對戰結束",
         }.get(ph, "")
-        if self.cur().cpu and ph not in ("moving", "jump", "over"):
+        if self.actor().cpu and ph not in ("moving", "jump", "over"):
             hint = "電腦思考中…"
         text(s, hint, (x, y), 16, COL["amber"])
 
