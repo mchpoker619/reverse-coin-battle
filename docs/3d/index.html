@@ -152,6 +152,13 @@ details.rtext summary { cursor: pointer; font-weight: 800; color: var(--text); m
 .sub { color: var(--dim); font-size: 15px; line-height: 1.7; margin: 0; }
 .stack { display: grid; gap: 10px; align-content: start; }
 .row2 { display: flex; gap: 10px; flex-wrap: wrap; }
+/* 主選單：主頁只有兩個大按鈕，其他放在子目錄 */
+.menuPage { display: flex; flex-direction: column; gap: 10px; }
+.menuPage[hidden] { display: none; }
+.menuBig { width: 100%; min-height: 64px; font-size: 22px; }
+.menuH { margin: 4px 0 2px; font: 900 18px var(--body); color: var(--volt); }
+.menuLbl { margin: 4px 0 -4px; font: 800 13px var(--body); color: var(--dim, #a39fb8); }
+.menuBack { width: 100%; margin-top: 4px; }
 .row2 > * { flex: 1 1 200px; }
 .rules { font-size: 15px; line-height: 1.8; margin: 0; padding-left: 1.2em; color: var(--dim); }
 .rules b { color: var(--text); }
@@ -243,7 +250,7 @@ button { touch-action: manipulation; }
 #aimPad { position: relative; width: 112px; height: 52px; flex: none; border-radius: 26px; background: rgba(255,255,255,.08);
   border: 2px solid rgba(255,255,255,.25); touch-action: none; cursor: ew-resize; }
 #aimPad::before, #aimPad::after { position: absolute; top: 50%; transform: translateY(-50%); font: 900 16px var(--body); color: rgba(255,255,255,.55); }
-#aimPad::before { content: "⟲"; left: 9px; } #aimPad::after { content: "⟳"; right: 9px; }
+#aimPad::before { content: "←"; left: 9px; } #aimPad::after { content: "→"; right: 9px; }
 #aimKnob { position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%;
   background: var(--volt); box-shadow: 0 2px 8px rgba(0,0,0,.5); pointer-events: none; transition: transform .12s; }
 #aimPad.on #aimKnob { transition: none; }
@@ -315,9 +322,9 @@ button { touch-action: manipulation; }
       <div class="pbBtns"><button class="btn" id="pbL" aria-label="逆時針轉">⟲ 轉</button><button class="btn" id="pbR" aria-label="順時針轉">轉 ⟳</button><button class="btn primary" id="pbOk">確定</button></div></div>
     <div id="aimBar" hidden aria-live="polite">
       <div id="aimTxt"></div>
-      <button class="btn abBtn" id="abL" aria-label="方向逆時針微調">⟲</button>
-      <div id="aimPad" role="slider" aria-label="旋轉搖桿：往左右推轉動方向，推越多轉越快"><div id="aimKnob"></div></div>
-      <button class="btn abBtn" id="abR" aria-label="方向順時針微調">⟳</button>
+      <button class="btn abBtn" id="abL" aria-label="方向往左微調">←</button>
+      <div id="aimPad" role="slider" aria-label="方向搖桿：往左右推轉動方向，推越多轉越快"><div id="aimKnob"></div></div>
+      <button class="btn abBtn" id="abR" aria-label="方向往右微調">→</button>
       <button class="btn primary" id="abOk">確定方向</button>
     </div>
     <div id="slowBanner" hidden>決勝翻轉！</div>
@@ -353,41 +360,56 @@ button { touch-action: manipulation; }
     <h1 class="title">逆轉金幣<small>REVERSE COIN BATTLE 3D</small></h1>
     <p style="margin:0 0 6px;font:900 16px var(--body);color:#ff6b7d">測試版推廣版本 請勿銷售利用｜遊戲版權歸 BANDAI 萬代所有</p>
     <p class="sub">逆転バリバリバース 立體對戰｜官方取扱説明書 Ver.1.1.2 エキスパートルール・全 101 枚金幣。金幣厚 8 mm、邊框有高度，打中リバースポット會真的彈起翻面。</p>
-    <div class="row2">
-      <button class="btn big primary" id="btnPvP">雙人對戰（同一台電腦）</button>
-      <button class="btn big" id="btnCPU">對戰電腦</button>
+    <div class="menuPage" id="menuMain">
+      <button class="btn big primary menuBig" id="mPlay">▶ 開始遊戲</button>
+      <button class="btn big menuBig" id="mSet">⚙ 遊戲設定</button>
     </div>
-    <button class="btn big" id="btnOnline" style="width:100%;border-color:var(--volt);color:var(--volt)">線上對戰（兩支手機／兩台電腦）</button>
-    <button class="btn big" id="btnTut" style="width:100%;border-color:#4ade80;color:#4ade80">新手教學（3 課：後拉＋精準度 → 打弱點 → OX 對決）</button>
-    <div class="row2">
-      <button class="btn" id="ruleOfficial">規則：專業 3V3（香港大賽，預設）</button>
-      <button class="btn" id="ruleHouse">規則：isn_ver.1 自訂</button>
+    <div class="menuPage" id="menuPlay" hidden>
+      <h3 class="menuH">開始遊戲｜選擇遊戲模式</h3>
+      <p class="menuLbl">規則</p>
+      <div class="row2">
+        <button class="btn" id="ruleOfficial">規則：專業 3V3（香港大賽，預設）</button>
+        <button class="btn" id="ruleStd">規則：標準 1V1（有 OX）</button>
+      </div>
+      <div class="row2">
+        <button class="btn" id="ruleEasy">規則：簡易 1V1（不比 OX）</button>
+        <button class="btn" id="ruleHouse">規則：isn_ver.1 自訂</button>
+      </div>
+      <p class="assetNote" id="ruleNote"></p>
+      <p class="menuLbl">模式</p>
+      <div class="row2">
+        <button class="btn big primary" id="btnPvP">雙人對戰（同一台電腦）</button>
+        <button class="btn big" id="btnCPU">對戰電腦</button>
+      </div>
+      <button class="btn big" id="btnOnline" style="width:100%;border-color:var(--volt);color:var(--volt)">線上對戰（兩支手機／兩台電腦）</button>
+      <button class="btn big" id="btnTut" style="width:100%;border-color:#4ade80;color:#4ade80">新手教學（3 課：後拉＋精準度 → 打弱點 → OX 對決）</button>
+      <button class="btn menuBack" data-menu="menuMain">← 返回主選單</button>
     </div>
-    <div class="row2">
-      <button class="btn" id="ruleEasy">規則：簡易 1V1（不比 OX）</button>
-      <button class="btn" id="ruleStd">規則：標準 1V1（有 OX）</button>
+    <div class="menuPage" id="menuSet" hidden>
+      <h3 class="menuH">遊戲設定</h3>
+      <div class="row2">
+        <button class="btn" id="spinOn">旋轉物理：開（撞球式）</button>
+        <button class="btn" id="spinOff">旋轉物理：關（經典）</button>
+      </div>
+      <p class="assetNote" id="spinNote"></p>
+      <button class="btn" id="tCpu" style="width:100%" aria-pressed="false">電腦強度：普通（點一下切換）</button>
+      <button class="btn" id="tOut" style="width:100%" aria-pressed="false">出界：開（官方）</button>
+      <button class="btn" id="tCtrl" style="width:100%" aria-pressed="false">操作：彈弓式（點一下切換）</button>
+      <div class="row2">
+        <button class="btn" id="tSound" aria-pressed="true">音效：開</button>
+        <button class="btn" id="tMusic" aria-pressed="true">音樂：開</button>
+      </div>
+      <button class="btn" id="tHaptic" style="width:100%" aria-pressed="true">手機震動回饋：開</button>
+      <div class="row2">
+        <button class="btn" id="btnRules">規則說明</button>
+        <button class="btn" id="btnAssets">載入官方圖片（從你的電腦）</button>
+      </div>
+      <p class="assetNote" id="assetNote">目前使用原創示意圖。按「載入官方圖片」並選擇電腦上的「逆轉金幣遊戲」資料夾（含 coins 與 field.jpg），就會換成實物金幣與官方バリ場。圖片只存在你的瀏覽器，不會上傳。</p>
+      <button class="btn menuBack" data-menu="menuMain">← 返回主選單</button>
     </div>
-    <div class="row2">
-      <button class="btn" id="spinOn">旋轉物理：開（撞球式）</button>
-      <button class="btn" id="spinOff">旋轉物理：關（經典）</button>
-    </div>
-    <div class="row2">
-      <button class="btn" id="tSound" aria-pressed="true">音效：開</button>
-      <button class="btn" id="tMusic" aria-pressed="true">音樂：開</button>
-    </div>
-    <button class="btn" id="tCpu" style="width:100%" aria-pressed="false">電腦強度：普通（點一下切換）</button>
-    <button class="btn" id="tOut" style="width:100%" aria-pressed="false">出界：開（官方）</button>
-    <button class="btn" id="tCtrl" style="width:100%" aria-pressed="false">操作：彈弓式（點一下切換）</button>
-    <button class="btn" id="tHaptic" style="width:100%" aria-pressed="true">手機震動回饋：開</button>
-    <div class="row2">
-      <button class="btn" id="btnRules">規則說明</button>
-      <button class="btn" id="btnAssets">載入官方圖片（從你的電腦）</button>
-    </div>
-    <p class="assetNote" id="ruleNote"></p>
-    <p class="assetNote" id="spinNote"></p>
     <input type="file" id="assetDir" webkitdirectory directory multiple hidden>
     <input type="file" id="assetFiles" accept=".png,.jpg,.jpeg" multiple hidden>
-    <p class="assetNote" id="assetNote">目前使用原創示意圖。按「載入官方圖片」並選擇電腦上的「逆轉金幣遊戲」資料夾（含 coins 與 field.jpg），就會換成實物金幣與官方バリ場。圖片只存在你的瀏覽器，不會上傳。</p>
+    
   </div>
 </div>
 
@@ -417,7 +439,7 @@ button { touch-action: manipulation; }
       <li><b>攻擊方</b>：出手的金幣自己出界 → 淘汰。<b>官方（預設）</b>：自爆翻成對方色、自己的金幣（含隊友）在自己回合出界，都是自滅 OUT。<b>isn_ver.1 自訂</b>：這兩種不淘汰。彈起仍是自己顏色 → セーフ，原地重新鎖定。</li>
       <li><b>防守方</b>：出界沒彈起 → Safe，由主人放回場內任何位置；翻成對方顏色 → 淘汰；彈起仍是自己顏色 → 比 OX，攻擊方較高才淘汰（平手守方勝），存活的由主人放回撞擊前的位置（場外的放回場內任何位置）。</li>
       <li><b>メタ幣</b>：被打到彈起時中央核心會翻面，OX 對決看<b>翻面後</b>的數值（例：レオウ白面 8000 被打彈起 → 用黑面 4000 比）。</li>
-      <li><b>場地</b>：官方 A3 バリ場 297×420 mm，金幣直徑 43 mm、厚 8 mm。<b>勝利</b>：淘汰對手全部 3 枚。</li>
+      <li><b>場地</b>：A2 420×594 mm（官方 A3 バリ場等比例放大），金幣直徑 43 mm、厚 8 mm。<b>勝利</b>：淘汰對手全部 3 枚。</li>
     </ul>
     </details>
     <button class="btn big" id="btnRulesBack">返回</button>
@@ -610,12 +632,13 @@ RULES.spin = true;
 try { const v = localStorage.getItem("rcb-spin"); if (v === "0") RULES.spin = false; } catch (e) {}
 
 // ======================================================================== 物理參數（單位：cm、秒）
-const W = 29.7, H = 42.0;          // 官方 A3 バリ場
+const W = 42.0, H = 59.4;          // A2 場地 420×594 mm（官方 A3 バリ場等比例放大 √2）
 const R = 2.15, T = 0.8;           // 金幣直徑 43 mm、厚 8 mm
 const RAIL_T = 1.6, RAIL_H = 1.2;  // 邊框厚度、高度
 // 香港大賽規則：自己的金幣直線間隔 1 枚（中心距 2 枚＝8.6）、與對手間隔 6 枚（中心距 7 枚＝30.1）
-const START_X = [0.5 - 8.6 / 29.7, 0.5, 0.5 + 8.6 / 29.7];
-const START_Y = {top: 0.5 - 15.05 / 42, bottom: 0.5 + 15.05 / 42};
+// 香港大賽擺放規則不變：自己的金幣間隔 1 枚、與對手間隔 6 枚（以 cm 絕對距離換算成場地比例）
+const START_X = [0.5 - 8.6 / W, 0.5, 0.5 + 8.6 / W];
+const START_Y = {top: 0.5 - 15.05 / H, bottom: 0.5 + 15.05 / H};
 const P = {
   FRICTION: 40.58, VMIN: 17.6, VMAX: 83.9,  // 場地摩擦 +3%（原 39.4）；力量整體＋10%、低力量也推得動
   OUT_SPEED: 40.82,  /* 出界門檻再 +30%（原 31.4） */               // 垂直撞向邊框 ≥ 此速度 → 飛出界（必定大於翻轉門檻 UNLOCK）
@@ -1083,7 +1106,8 @@ const CPU = {
   CFG: {easy: {pw: 0.14, acc: 0.55, spot: 0.3}, normal: {pw: 0.05, acc: 0.22, spot: 1}, hard: {pw: 0.025, acc: 0.07, spot: 1}, god: {pw: 0.02, acc: 0.05, spot: 1}},
   set(v) { this.lv = v; try { localStorage.setItem("rcb-cpu", v); } catch (e) {} this.sync(); },
   next() { const L = ["easy", "normal", "hard", "god"]; this.set(L[(L.indexOf(this.lv) + 1) % 4]); },
-  sync() { const b = document.getElementById("tCpu"); if (b) { b.textContent = "電腦強度：" + this.NAME[this.lv] + (this.lv === "god" ? "（90% 神之一擊）" : "") + "（點一下切換）"; b.setAttribute("aria-pressed", this.lv !== "normal"); } },
+  sync() { const c = document.getElementById("btnCPU"); if (c) c.textContent = `對戰電腦（${this.NAME[this.lv]}）`;
+    const b = document.getElementById("tCpu"); if (b) { b.textContent = "電腦強度：" + this.NAME[this.lv] + (this.lv === "god" ? "（90% 神之一擊）" : "") + "（點一下切換）"; b.setAttribute("aria-pressed", this.lv !== "normal"); } },
 };
 function cpuPlanShot() {
   const own = ownAlive(), enemy = ownAlive(1 - G.turn);
@@ -1254,7 +1278,7 @@ function genField() {
   g.lineWidth = 3*S; g.strokeStyle = "rgba(230,200,255,.6)"; g.strokeText("XTREME", w/2, h - 42*S);
   g.save(); g.translate(w/2, h/2); g.rotate(-0.35); g.font = `400 ${120*S}px 'Dela Gothic One', sans-serif`;
   g.fillStyle = "rgba(180,77,240,.20)"; g.fillText("逆轉", 0, 0); g.restore();
-  const pxmm = w / 297;
+  const pxmm = w / (W * 10);
   for (const side of ["top", "bottom"]) for (let k = 0; k < 3; k++) {
     const x = START_X[k] * w, y = START_Y[side] * h, r = 22.5 * pxmm;
     g.beginPath(); g.arc(x, y, r, 0, Math.PI*2); g.lineWidth = 2*S; g.strokeStyle = side === "top" ? "#4a4660" : "#c48cf0"; g.stroke();
@@ -1317,15 +1341,15 @@ const GFX = (() => {
   stage.prepend(renderer.domElement);
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xd8cdb8);
-  scene.fog = new THREE.Fog(0xd8cdb8, 110, 200);
+  scene.fog = new THREE.Fog(0xd8cdb8, 170, 320);
   const camera = new THREE.PerspectiveCamera(38, 1, 0.5, 400);
   const cam = {theta: 0, phi: 0.62, dist: 70, tTheta: 0, tPhi: 0.62, mode: "tilt", follow: true};
 
   scene.add(new THREE.HemisphereLight(0xf2efe6, 0x8a7a62, 0.5));
   const sun = new THREE.DirectionalLight(0xffffff, 0.95);
-  sun.position.set(-14, 46, 22); sun.castShadow = true;
+  sun.position.set(-20, 64, 30); sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  Object.assign(sun.shadow.camera, {left: -30, right: 30, top: 34, bottom: -34, near: 1, far: 120});
+  Object.assign(sun.shadow.camera, {left: -W/2 - 10, right: W/2 + 10, top: H/2 + 10, bottom: -H/2 - 10, near: 1, far: 160});
   sun.shadow.bias = -0.0008;
   scene.add(sun);
 
@@ -1842,8 +1866,8 @@ const Input = {
       if (e.key === "Tab") { e.preventDefault(); const own = ownAlive(); const i = own.indexOf(G.selected); G.selected = own[(i + 1) % own.length]; UI.refresh(); }
       else if (go) confirmSelect();
     } else if (ph === "aim") {                        // 鍵盤：←→ 方向、↑↓ 力量、Space 發射
-      if (e.key === "ArrowLeft") { G.aim -= Math.PI / 180; NET.aim(); }
-      else if (e.key === "ArrowRight") { G.aim += Math.PI / 180; NET.aim(); }
+      if (e.key === "ArrowLeft") { G.aim -= Math.PI / 180 * AimBar.sgn(); NET.aim(); }      // ← 往畫面左邊轉
+      else if (e.key === "ArrowRight") { G.aim += Math.PI / 180 * AimBar.sgn(); NET.aim(); }
       else if (e.key === "ArrowUp") { e.preventDefault(); G.power = clamp(G.power + 0.05, 0, 1); NET.aim(); }
       else if (e.key === "ArrowDown") { e.preventDefault(); G.power = clamp(G.power - 0.05, 0, 1); NET.aim(); }
       else if (e.key === "Escape") { G.phase = "select"; G.pull = null; G.power = 0; UI.refresh(); }
@@ -2219,7 +2243,7 @@ const AimBar = {
     if (on && bar.hidden) this.shownAt = performance.now();     // 剛出現：同一下點擊的殘留事件不算按到按鈕
     bar.hidden = !on; if (!on) { this.v = 0; this.hold = 0; return; }
     const touch = matchMedia("(pointer: coarse)").matches;
-    $("aimTxt").innerHTML = `🎯 ${touch ? "點或拖曳畫面調方向" : "移動滑鼠對準"}，搖桿／⟲⟳ 微調<br>按 <b>確定方向</b> 鎖定 → 力量條（之後點哪裡都不會改方向） <span id="aimDeg"></span>`;
+    $("aimTxt").innerHTML = `🎯 ${touch ? "點或拖曳畫面調方向" : "移動滑鼠對準"}，搖桿／← → 微調<br>按 <b>確定方向</b> 鎖定 → 力量條（之後點哪裡都不會改方向） <span id="aimDeg"></span>`;
     this.deg();
   },
   deg() { const d = $("aimDeg"); if (d) d.textContent = (Math.round(G.aim * 180 / Math.PI) % 360 + 360) % 360 + "°"; },
@@ -2230,7 +2254,14 @@ const AimBar = {
     this.v = 0; this.hold = 0; Haptic.buzz && Haptic.buzz(15);
     confirmAim(); NET.aim(true);
   },
-  turn(rad) { if (!this.on()) return; G.aim += rad; NET.aim(); this.deg(); },
+  // 角度變大時，發射方向的箭頭在畫面上往哪邊移：+1＝右、−1＝左（往上打和往下打相反、鏡頭轉向也算進去）
+  sgn() {
+    const s = G.selected; if (!s || !GFX.toScreen) return 1;
+    const a = GFX.toScreen(s.x + Math.cos(G.aim) * 6, s.z + Math.sin(G.aim) * 6), b = GFX.toScreen(s.x + Math.cos(G.aim + 0.05) * 6, s.z + Math.sin(G.aim + 0.05) * 6);
+    const dx = b[0] - a[0], dy = b[1] - a[1];
+    return Math.abs(dx) >= 0.3 * Math.abs(dy) ? (dx >= 0 ? 1 : -1) : 1;
+  },
+  turn(rad) { if (!this.on()) return; G.aim += rad * this.sgn(); NET.aim(); this.deg(); },
   tick(dt) {                                           // 每格：搖桿推幾成就轉多快；⟲⟳ 按住越久轉越快
     if (!this.on()) return;
     let w = this.v * Math.abs(this.v) * 1.8;            // 最快約 100°/秒，推一點點＝很慢，方便微調
@@ -2741,6 +2772,15 @@ $("ruleHouse").onclick = () => setRule("house");
 $("ruleEasy").onclick = () => setRule("easy");
 $("ruleStd").onclick = () => setRule("standard");
 $("ruleOfficial").onclick = () => setRule("official");
+// 主選單切頁（記住上次在哪一頁：打完回來還在「開始遊戲」）
+const Menu = {
+  go(id) { for (const m of ["menuMain", "menuPlay", "menuSet"]) $(m).hidden = m !== id;
+    const f = $(id).querySelector("button"); if (f && document.activeElement && document.activeElement.closest && document.activeElement.closest("#title")) f.focus(); },
+};
+window.Menu = Menu;
+$("mPlay").onclick = () => Menu.go("menuPlay");
+$("mSet").onclick = () => Menu.go("menuSet");
+for (const b of document.querySelectorAll(".menuBack")) b.onclick = () => Menu.go(b.dataset.menu);
 $("btnPvP").onclick = () => startMatch(false);
 $("btnCPU").onclick = () => startMatch(true);
 $("btnRules").onclick = $("btnRules2").onclick = () => { $("rulesOv").hidden = false; };
@@ -2919,7 +2959,7 @@ G.players[0].camp = "X"; G.players[1].camp = "O";
 G.players[0].team = PRESETS[0][1].slice(); G.players[1].team = PRESETS[1][1].slice();
 G.pieces = []; G.players.forEach((pl, t) => { pl.side = pl.camp === "O" ? "top" : "bottom"; const z = -H/2 + START_Y[pl.side]*H; pl.team.forEach((id, k) => G.pieces.push(makePiece(BY_ID[id], t, pl.camp, -W/2 + START_X[k]*W, z, pl.side === "bottom" ? 0 : Math.PI))); });
 GFX.buildPieces(); GFX.cam.tTheta = 0.5;
-window.__RCB = {actor, locked, setRule, teamMax, matchTime, setNoOut, PIP, CPU, Relay, CTRL, Tut, Watch, Report, Haptic, SFX, predictPath, accErr, perfZone, G, P, RULES, physics, collide, railBounce, startResolve, applyResults, afterResults, startBattle, beginTurn, update, placeValid, place, confirmSelect, confirmAim, lockPower, lockAcc, newPlayer, PRESETS, BY_ID, COINS, R, W, H, UI, GFX, pval, skipDuel};
+window.__RCB = {Menu, AimBar, actor, locked, setRule, teamMax, matchTime, setNoOut, PIP, CPU, Relay, CTRL, Tut, Watch, Report, Haptic, SFX, predictPath, accErr, perfZone, G, P, RULES, physics, collide, railBounce, startResolve, applyResults, afterResults, startBattle, beginTurn, update, placeValid, place, confirmSelect, confirmAim, lockPower, lockAcc, newPlayer, PRESETS, BY_ID, COINS, R, W, H, UI, GFX, pval, skipDuel};
 </script>
 
 </body>
