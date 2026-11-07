@@ -636,6 +636,11 @@ class Game:
                                 self.toggle_music, size=16)
         self.ctrl_btn = Button((FIELD.right - 272, 14, 132, 34), "操作：彈弓式" if SLING_MODE else "操作：點選式", self.toggle_ctrl, size=16)
         self.buttons = [self.guide_btn, self.sound_btn, self.music_btn, self.ctrl_btn]
+        # 點選式：確定方向（鎖定後才跑力量條，之後點哪裡都不會改方向）＋⟲⟳ 微調（按住連續轉）
+        self.aim_btns = [Button((PANEL_X + 14, 712, 70, 48), "左轉", lambda: self.turn_aim(-1), size=20),
+                         Button((PANEL_X + 92, 712, 70, 48), "右轉", lambda: self.turn_aim(1), size=20),
+                         Button((PANEL_X + 170, 712, 246, 48), "確定方向", self.aim_ok, size=22, color=(78, 52, 150))]
+        self.aim_hold = None
         if SPIN_ON:
             ok = lambda: self.cur() and not self.cur().cpu and self.phase in ("select", "aim", "power")
             self.spin_btns = [Button((0, -100, 96, 30), "◀ 左旋", lambda: self.add_spin(-1), ok, size=15),
@@ -1263,6 +1268,8 @@ class Game:
         key = e.key if e.type == pygame.KEYDOWN else None
         go = click or key in (pygame.K_SPACE, pygame.K_RETURN)
         ph = self.phase
+        if click and self.aim_active() and any(b.click(e.pos) for b in self.aim_btns):
+            return
         if key in (pygame.K_z, pygame.K_x) and ph in ("select", "aim", "power") and SPIN_ON:
             self.spin_lvl = max(-3, min(3, self.spin_lvl + (-1 if key == pygame.K_z else 1)))
             return
@@ -1275,13 +1282,10 @@ class Game:
                     if p.pos.distance_to(e.pos) <= R + 4:
                         self.selected, self.phase, self.power = p, "aim", 0.0
                         return
-                if ph == "aim" and self.selected:          # 點在別處＝朝那裡瞄準並開始力量條
-                    d = Vector2(e.pos) - self.selected.pos
-                    if d.length() > 5:
-                        self.aim = math.atan2(d.y, d.x)
+                if ph == "aim" and self.selected:          # 滑鼠已經對準：點一下＝確定方向（不再依點擊位置改方向）
                     self.confirm_aim()
                 return
-            if ph == "aim" and e.type == pygame.MOUSEMOTION and self.selected:
+            if ph == "aim" and e.type == pygame.MOUSEMOTION and self.selected and e.pos[0] < PANEL_X:   # 移到右側面板按按鈕時方向不跟著跑
                 d = Vector2(e.pos) - self.selected.pos
                 if d.length() > R * 0.6:
                     self.aim = math.atan2(d.y, d.x)
@@ -1352,7 +1356,28 @@ class Game:
         elif ph == "place" and key in (pygame.K_q, pygame.K_e):
             self.place_rot += (-1 if key == pygame.K_q else 1) * math.pi / 8
 
+    def aim_active(self):
+        return (self.scene == "battle" and self.phase == "aim" and not SLING_MODE and self.selected is not None
+                and not self.actor().cpu)
+
+    def turn_aim(self, d):
+        if self.aim_active():
+            self.aim += d * math.pi / 360                    # 點一下＝0.5°
+            self.aim_hold = [d, 0.0]
+
+    def aim_ok(self):
+        if self.aim_active():
+            self.aim_hold = None
+            self.confirm_aim()
+
     def update(self, dt):
+        if self.aim_hold:                                     # ⟲⟳ 按住越久轉越快
+            if not (self.aim_active() and pygame.mouse.get_pressed()[0]):
+                self.aim_hold = None
+            else:
+                self.aim_hold[1] += dt
+                if self.aim_hold[1] > 0.35:
+                    self.aim += self.aim_hold[0] * min(1.4, 0.15 + (self.aim_hold[1] - 0.35) * 0.9) * dt
         if self.scene == "rps" and self.players[self.rps_winner].cpu and self.rps_stage == "pick":
             self.cpu_timer -= dt
             if self.cpu_timer <= 0:
@@ -1913,9 +1938,17 @@ class Game:
                     cur = "　"
                 cur += ch
             rows.append((cur, col))
-        for ln, col in rows[-int((760 - y) / 21):]:
+        bottom = 664 if self.aim_active() else 760
+        for ln, col in rows[-max(1, int((bottom - y) / 21)):]:
             text(s, ln, (px + 14, y), 15, col)
             y += 21
+        if self.aim_active():
+            pygame.draw.rect(s, (20, 18, 28), (px + 6, 668, 418, 98), border_radius=10)
+            pygame.draw.rect(s, COL["yel"], (px + 6, 668, 418, 98), 2, border_radius=10)
+            deg = round(math.degrees(self.aim)) % 360
+            text(s, f"對準後按「確定方向」鎖定 → 力量條（{deg}°）", (px + 16, 678), 16, COL["yel"], bold=True)
+            for b in self.aim_btns:
+                b.draw(s, self.mouse)
 
     def draw_bars(self, x, y):
         s = self.screen
@@ -1956,7 +1989,7 @@ class Game:
         y += 32
         hint = {
             "select": "① 點自己的金幣，按住往後拉" if SLING_MODE else "① 點自己的金幣（點選式）",
-            "aim": "② 往反方向拉（越長越大力），放開發射｜↑↓←→" if SLING_MODE else "② 移動滑鼠對準，點一下開始力量條｜←→",
+            "aim": "② 往反方向拉（越長越大力），放開發射｜↑↓←→" if SLING_MODE else "② 移動滑鼠對準，點場地或「確定方向」鎖定｜左轉／右轉、←→ 微調",
             "power": "③ 放開發射" if SLING_MODE else "③ 力量條：點一下決定力量",
             "accuracy": "④ 精準度：停在中間綠區＝PERFECT",
             "moving": "金幣滑行中…",
