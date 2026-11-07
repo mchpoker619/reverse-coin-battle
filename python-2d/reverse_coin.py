@@ -17,20 +17,21 @@ from coin_data import BUDGET, BY_ID, COINS, PRESETS
 
 # ---------------------------------------------------------------- 常數
 SW, SH = 1280, 820
-# 官方「バリ場」A3（BANDAI 公式無料配布）：297 × 420 mm；金幣直徑 43 mm
-MM = 1.65                               # 1 mm = 1.65 px
-FIELD_W_MM, FIELD_H_MM, COIN_MM = 297, 420, 43
+# 場地 A2：420 × 594 mm（官方 A2 場地等比例放大 √2 倍）；金幣直徑 43 mm
+FIELD_W_MM, FIELD_H_MM, COIN_MM = 420, 594, 43
+MM = 1.65 * 297 / FIELD_W_MM            # 1 mm 幾 px（場地在畫面上大小不變，A2 時約 1.167）
+LEN_S = MM / 1.65                       # 長度比例：以下 px 單位的速度／加速度都乘上它，手感與 A3 版相同
 FIELD = pygame.Rect(0, 0, round(FIELD_W_MM * MM), round(FIELD_H_MM * MM))
 FIELD.center = (420, 418)
 PANEL_X = 830
 R = round(COIN_MM * MM / 2)             # 金幣半徑（px）
 # 官方圖紙上的開場圓圈位置（以場地寬高比例表示）：上方 ORDER（白）、下方 XTREME（黑），約相距 6 枚金幣
 # 香港大賽規則：自己的金幣直線間隔 1 枚、與對手間隔 6 枚
-START_X = (0.5 - 86 / 297, 0.5, 0.5 + 86 / 297)
-START_Y = {"top": 0.5 - 150.5 / 420, "bottom": 0.5 + 150.5 / 420}
+START_X = (0.5 - 86 / FIELD_W_MM, 0.5, 0.5 + 86 / FIELD_W_MM)      # 擺放規則不變：絕對距離（mm）固定
+START_Y = {"top": 0.5 - 150.5 / FIELD_H_MM, "bottom": 0.5 + 150.5 / FIELD_H_MM}
 # 撞球檯式邊框：碰到邊框時，垂直於邊框的速度 ≥ OUT_SPEED 才會飛出場外，否則回彈
 RAIL = 16                               # 邊框厚度（px）
-OUT_SPEED = 672.75                       # 飛出邊框的門檻速度（px/s），一定要大於翻轉門檻 UNLOCK_SPEED
+OUT_SPEED = 672.75 * LEN_S                       # 飛出邊框的門檻速度（px/s），一定要大於翻轉門檻 UNLOCK_SPEED
 RAIL_REST = 0.7                         # 邊框回彈係數
 # 規則：True＝官方說明書 Ver.1.1.2（預設）；False＝isn_ver.1 自訂（攻擊方翻色不淘汰、隊友出界放回）
 OFFICIAL_RULES = True
@@ -51,7 +52,7 @@ def match_time():
     return 300.0 if RULE_MODE in ("easy", "standard") else MATCH_TIME   # 簡易／標準 5 分鐘、專業 8 分鐘
 DUEL_TIME = 2.4                         # 每張 OX 對決畫面顯示秒數
 FLIP_CHANCE = 0.5                       # 彈起翻轉後落地換成對方顏色的機率（正反各 1/2）
-FRICTION = 669.5                        # 滑行減速 px/s²（場地摩擦 +3%，原 650）
+FRICTION = 669.5 * LEN_S                        # 滑行減速 px/s²（場地摩擦 +3%，原 650）
 COIN_REST = 0.98                        # 金幣互撞回彈係數（撞球約 0.93～0.98）
 # 旋轉（撞球式）：單位 rad/s，金幣當均勻圓盤（轉動慣量 I = ½ m R²）
 SPIN_STEP = 8.75                        # 出手旋轉每段角速度（左右各 3 段）
@@ -68,12 +69,12 @@ PULL_MIN = 0.04                         # 拉不到 4% 視為取消
 TURN_TIME = 18.0                        # 每回合出手限時（秒），超過＝放棄這回合
 MATCH_TIME = 480.0                      # 全場 8 分鐘：時間到比開場隊伍 M 值合計，少的一方獲勝
 SPIN_PERF = 0.2                         # 每加 1 段旋轉，PERFECT 區縮小 20%（3 段剩 40%）
-VMIN, VMAX = 290.0, 1386.0           # 力量整體＋10%、低力量也推得動（原 160～1260）              # 力量 0%～100% 的初速
+VMIN, VMAX = 290.0 * LEN_S, 1386.0 * LEN_S           # 力量整體＋10%、低力量也推得動（原 160～1260）              # 力量 0%～100% 的初速
 SPOT_HALF = math.radians(14.112)   # 弱點 ±14.1°（13.44° 再加大 5%）           # リバースポット半角（開關側與對側各一）
-UNLOCK_RAIL = 322.0                     # 弱點撞「邊框」的翻轉門檻（維持不變）
-UNLOCK_SPEED = 296.24                    # 翻轉力道：リバースポット受到的撞擊速度 ≥ 此值才會彈起（金幣互撞、撞邊框皆同）
+UNLOCK_RAIL = 322.0 * LEN_S                     # 弱點撞「邊框」的翻轉門檻（維持不變）
+UNLOCK_SPEED = 296.24 * LEN_S                    # 翻轉力道：リバースポット受到的撞擊速度 ≥ 此值才會彈起（金幣互撞、撞邊框皆同）
 ACC_MAX_ERR = math.radians(70)          # 精準度條最邊緣：以發射方向為基準左右各偏 70°
-ACC_CURVE = 400.0                       # 精準度偏差造成的側向弧線加速度
+ACC_CURVE = 400.0 * LEN_S                       # 精準度偏差造成的側向弧線加速度
 MISS_MIN = 5 / 70                       # 沒按進 PERFECT 區至少偏 5°
 AIM_COL, TGT_COL, CUT_COL = (24, 224, 255), (255, 138, 0), (125, 255, 58)   # 輔助線：青／橘／綠
 PERFECT = 0.07
@@ -357,24 +358,41 @@ class Game:
         self.goto_title()
 
     # ============================================================ 場景切換
-    def goto_title(self):
+    def goto_title(self, page=None):
+        """主選單分三頁：main（開始遊戲／遊戲設定／離開）、play（遊戲模式）、set（遊戲設定）。"""
         self.scene = "title"
+        if page:
+            self.title_page = page
+        page = getattr(self, "title_page", "main")
         cx = SW // 2
-        self.buttons = [
-            Button((cx - 160, 360, 320, 60), "雙人對戰（同一台電腦）", lambda: self.start_match(False), size=24),
-            Button((cx - 160, 432, 196, 60), "對戰電腦", lambda: self.start_match(True), size=24),
-            Button((cx + 44, 432, 116, 60), "強度：" + CPU_NAME[CPU_LEVEL], self.cycle_cpu, size=17,
-                   color=(110, 40, 40) if CPU_LEVEL == "god" else None),
-            Button((cx - 160, 504, 155, 60), "旋轉：開" if SPIN_ON else "旋轉：關", self.toggle_spin,
-                   size=20, color=(75, 40, 95) if SPIN_ON else None),
-            Button((cx + 5, 504, 155, 60), "操作：彈弓式" if SLING_MODE else "操作：點選式", self.toggle_ctrl_title, size=20),
-            Button((cx - 160, 576, 196, 60), {"official": "規則：專業 3V3", "standard": "規則：標準 1V1", "easy": "規則：簡易 1V1"}[RULE_MODE],
-                   self.toggle_easy, size=19, color=(40, 80, 60) if RULE_MODE != "official" else None),
-            Button((cx + 44, 576, 116, 60), "出界：關" if NO_OUT else "出界：開", self.toggle_out, size=17,
-                   color=(40, 70, 100) if NO_OUT else None),
-            Button((cx - 160, 648, 155, 60), "規則說明", self.goto_rules, size=22),
-            Button((cx + 5, 648, 155, 60), "離開", self.quit, size=22),
-        ]
+        back = Button((cx - 160, 680, 320, 52), "← 返回", lambda: self.goto_title("main"), size=22)
+        if page == "play":
+            self.buttons = [
+                Button((cx - 160, 360, 320, 52), {"official": "規則：專業 3V3（8 分鐘）", "standard": "規則：標準 1V1（5 分鐘）",
+                                                  "easy": "規則：簡易 1V1（5 分鐘）"}[RULE_MODE] + "　點一下切換",
+                       self.toggle_easy, size=18, color=(40, 80, 60) if RULE_MODE != "official" else None),
+                Button((cx - 160, 428, 320, 66), "雙人對戰（同一台電腦）", lambda: self.start_match(False), size=24),
+                Button((cx - 160, 506, 320, 66), f"對戰電腦（{CPU_NAME[CPU_LEVEL]}）", lambda: self.start_match(True), size=24),
+                back]
+        elif page == "set":
+            self.buttons = [
+                Button((cx - 160, 360, 155, 56), "強度：" + CPU_NAME[CPU_LEVEL], self.cycle_cpu, size=18,
+                       color=(110, 40, 40) if CPU_LEVEL == "god" else None),
+                Button((cx + 5, 360, 155, 56), "操作：彈弓式" if SLING_MODE else "操作：點選式", self.toggle_ctrl_title, size=18),
+                Button((cx - 160, 426, 155, 56), "旋轉：開" if SPIN_ON else "旋轉：關", self.toggle_spin,
+                       size=20, color=(75, 40, 95) if SPIN_ON else None),
+                Button((cx + 5, 426, 155, 56), "出界：關" if NO_OUT else "出界：開", self.toggle_out, size=20,
+                       color=(40, 70, 100) if NO_OUT else None),
+                Button((cx - 160, 492, 155, 56), "音效：開" if self.sfx.on else "音效：關", self.title_sound, size=20),
+                Button((cx + 5, 492, 155, 56), "音樂：開" if self.sfx.music_on else "音樂：關", self.title_music, size=20),
+                Button((cx - 160, 558, 320, 56), "規則說明", self.goto_rules, size=22),
+                back]
+        else:
+            self.buttons = [
+                Button((cx - 160, 380, 320, 76), "開始遊戲", lambda: self.goto_title("play"), size=32, color=(78, 52, 150)),
+                Button((cx - 160, 476, 320, 64), "遊戲設定", lambda: self.goto_title("set"), size=26),
+                Button((cx - 160, 560, 320, 56), "離開", self.quit, size=22),
+            ]
         for b in self.buttons:                       # 主選單按鈕半透明
             b.alpha = 215
 
@@ -415,6 +433,14 @@ class Game:
         global CPU_LEVEL
         order = ["easy", "normal", "hard", "god"]
         CPU_LEVEL = order[(order.index(CPU_LEVEL) + 1) % 4]
+        self.goto_title()
+
+    def title_sound(self):
+        self.toggle_sound()
+        self.goto_title()
+
+    def title_music(self):
+        self.toggle_music()
         self.goto_title()
 
     def toggle_ctrl_title(self):
@@ -637,8 +663,8 @@ class Game:
         self.ctrl_btn = Button((FIELD.right - 272, 14, 132, 34), "操作：彈弓式" if SLING_MODE else "操作：點選式", self.toggle_ctrl, size=16)
         self.buttons = [self.guide_btn, self.sound_btn, self.music_btn, self.ctrl_btn]
         # 點選式：確定方向（鎖定後才跑力量條，之後點哪裡都不會改方向）＋⟲⟳ 微調（按住連續轉）
-        self.aim_btns = [Button((PANEL_X + 14, 712, 70, 48), "左轉", lambda: self.turn_aim(-1), size=20),
-                         Button((PANEL_X + 92, 712, 70, 48), "右轉", lambda: self.turn_aim(1), size=20),
+        self.aim_btns = [Button((PANEL_X + 14, 712, 70, 48), "←", lambda: self.turn_aim(-1), size=28),
+                         Button((PANEL_X + 92, 712, 70, 48), "→", lambda: self.turn_aim(1), size=28),
                          Button((PANEL_X + 170, 712, 246, 48), "確定方向", self.aim_ok, size=22, color=(78, 52, 150))]
         self.aim_hold = None
         if SPIN_ON:
@@ -858,7 +884,7 @@ class Game:
             p.rail_hits += 1
 
     def all_stopped(self):
-        return all(p.vel.length() < 3 and abs(p.spin) < 0.4 for p in self.pieces if p.alive)
+        return all(p.vel.length() < 3 * LEN_S and abs(p.spin) < 0.4 for p in self.pieces if p.alive)
 
     # ------------------------------------------------------------ 判定
     def start_resolve(self):
@@ -1137,7 +1163,7 @@ class Game:
         _, s, c, dist, tgt = best
         pw_e, acc_e, _w = CPU_CFG[CPU_LEVEL]
         god = CPU_LEVEL == "god" and random.random() < 0.9            # 硬幣之神：90% 神之一擊
-        need = math.sqrt(430 ** 2 + 2 * FRICTION * dist)
+        need = math.sqrt((430 * LEN_S) ** 2 + 2 * FRICTION * dist)
         power = max(0.05, min(1.0, (need - VMIN) / (VMAX - VMIN)))
         d = c - s.pos
         self.cpu_plan = dict(piece=s, aim=math.atan2(d.y, d.x),
@@ -1360,8 +1386,16 @@ class Game:
         return (self.scene == "battle" and self.phase == "aim" and not SLING_MODE and self.selected is not None
                 and not self.actor().cpu)
 
+    def screen_dir(self):
+        """角度變大時，發射方向的箭頭往畫面哪邊移：+1＝右、−1＝左（往上打和往下打相反）。"""
+        dx, dy = -math.sin(self.aim), math.cos(self.aim)
+        if abs(dx) >= 0.3 * abs(dy):
+            return 1 if dx > 0 else -1
+        return 1                                              # 幾乎水平時：→＝順時針
+
     def turn_aim(self, d):
         if self.aim_active():
+            d *= self.screen_dir()                           # ← 一定往畫面左邊、→ 往右邊
             self.aim += d * math.pi / 360                    # 點一下＝0.5°
             self.aim_hold = [d, 0.0]
 
@@ -1477,7 +1511,7 @@ class Game:
             "【自滅】自己回合自己的金幣出界（含被自己撞出去的隊友）→ OUT；自爆翻成對方顏色 → OUT。",
             "　　　　自爆仍是自己顏色 → セーフ，放回撞擊前的位置。沒撞到任何金幣 → 無效攻擊。",
             "【模式】專業 3V3（8 分鐘）／標準 1V1（5 分鐘、有 OX）／簡易 1V1（5 分鐘、不比 OX）；出界開關關閉時撞框一律反彈。",
-            "【場地】官方 A3 バリ場 297×420 mm（上 ORDER 白／下 XTREME 黑），金幣直徑 43 mm。",
+            "【場地】A2 場地 420×594 mm（官方 A3 バリ場等比例放大）（上 ORDER 白／下 XTREME 黑），金幣直徑 43 mm。",
             "【邊框】撞球檯式：垂直撞擊 ≥ 出界門檻（517，必定大於翻轉門檻 322）才飛出界，否則減速反彈；弱點撞牆 ≥ 322 也會彈起。",
             "【勝利】淘汰對手全部金幣。（程式開頭 OFFICIAL_RULES = False 可改回 isn_ver.1 自訂規則）",
         ]
@@ -1989,7 +2023,7 @@ class Game:
         y += 32
         hint = {
             "select": "① 點自己的金幣，按住往後拉" if SLING_MODE else "① 點自己的金幣（點選式）",
-            "aim": "② 往反方向拉（越長越大力），放開發射｜↑↓←→" if SLING_MODE else "② 移動滑鼠對準，點場地或「確定方向」鎖定｜左轉／右轉、←→ 微調",
+            "aim": "② 往反方向拉（越長越大力），放開發射｜↑↓←→" if SLING_MODE else "② 移動滑鼠對準，點場地或「確定方向」鎖定｜← → 微調",
             "power": "③ 放開發射" if SLING_MODE else "③ 力量條：點一下決定力量",
             "accuracy": "④ 精準度：停在中間綠區＝PERFECT",
             "moving": "金幣滑行中…",
