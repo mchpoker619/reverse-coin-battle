@@ -230,6 +230,25 @@ details.rtext summary { cursor: pointer; font-weight: 800; color: var(--text); m
 #tutOv .card { max-width: 560px; }
 #tutOv ol { margin: 6px 0 10px; padding-left: 1.3em; line-height: 1.7; }
 #tutOv .tutRes { font: 900 22px var(--body); margin: 4px 0; }
+/* ---- 點選式：瞄準鎖定列＋旋轉搖桿 */
+button { touch-action: manipulation; }
+#aimBar { position: absolute; left: 50%; bottom: 54px; transform: translateX(-50%); z-index: 7; width: min(600px, 96%);
+  background: rgba(20, 18, 28, .92); border: 2px solid var(--volt); border-radius: 14px; padding: 8px 10px;
+  display: flex; align-items: center; gap: 10px; touch-action: none; user-select: none; -webkit-user-select: none; }
+#aimTxt { flex: 1; font: 800 14px var(--body); color: var(--text); line-height: 1.4; text-align: left; }
+#aimTxt b { color: var(--volt); }
+#aimDeg { font: 900 13px var(--mono, monospace); color: var(--volt); }
+#aimPad { position: relative; width: 112px; height: 52px; flex: none; border-radius: 26px; background: rgba(255,255,255,.08);
+  border: 2px solid rgba(255,255,255,.25); touch-action: none; cursor: ew-resize; }
+#aimPad::before, #aimPad::after { position: absolute; top: 50%; transform: translateY(-50%); font: 900 16px var(--body); color: rgba(255,255,255,.55); }
+#aimPad::before { content: "⟲"; left: 9px; } #aimPad::after { content: "⟳"; right: 9px; }
+#aimKnob { position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%;
+  background: var(--volt); box-shadow: 0 2px 8px rgba(0,0,0,.5); pointer-events: none; transition: transform .12s; }
+#aimPad.on #aimKnob { transition: none; }
+.abBtn { min-width: 46px; min-height: 46px; padding: 0 8px; touch-action: none; }
+#abOk { min-width: 108px; min-height: 52px; font-size: 16px; }
+@media (max-width: 820px) { #aimBar { position: fixed; bottom: calc(30px + env(safe-area-inset-bottom, 0px)); background: rgb(20, 18, 28); left: 6px; right: 6px; width: auto; transform: none; z-index: 30; padding: 6px 8px; gap: 6px; flex-wrap: wrap; justify-content: center; }
+  #aimTxt { flex-basis: 100%; text-align: center; font-size: 13px; } #aimPad { width: 120px; } }
 /* ---- 重新放置提示列 */
 #phaseBar { position: absolute; left: 50%; bottom: 54px; transform: translateX(-50%); z-index: 7; width: min(560px, 94%);
   background: rgba(20, 18, 28, .92); border: 2px solid var(--volt); border-radius: 14px; padding: 10px 12px; text-align: center; }
@@ -280,7 +299,7 @@ details.rtext summary { cursor: pointer; font-weight: 800; color: var(--text); m
       <button id="camSound" aria-pressed="true">音效：開</button>
       <button id="camMusic" aria-pressed="true">音樂：開</button>
       <button id="camGuide" aria-pressed="true">輔助線：開</button>
-      <button id="camCtrl" aria-pressed="false" title="彈弓式：按住往後拉；點選式：點方向 → 力量條 → 精準度（V 鍵切換）">操作：彈弓式</button>
+      <button id="camCtrl" aria-pressed="false" title="彈弓式：按住往後拉；點選式：對準 → 確定方向 → 力量條 → 精準度（V 鍵切換）">操作：彈弓式</button>
       <button id="camRotL" aria-label="鏡頭左轉">⟲</button>
       <button id="camRotR" aria-label="鏡頭右轉">⟳</button>
     </div>
@@ -289,6 +308,13 @@ details.rtext summary { cursor: pointer; font-weight: 800; color: var(--text); m
     <div id="tutBar" hidden aria-live="polite"></div>
     <div id="phaseBar" hidden aria-live="polite"><div id="phaseTxt"></div>
       <div class="pbBtns"><button class="btn" id="pbL" aria-label="逆時針轉">⟲ 轉</button><button class="btn" id="pbR" aria-label="順時針轉">轉 ⟳</button><button class="btn primary" id="pbOk">確定</button></div></div>
+    <div id="aimBar" hidden aria-live="polite">
+      <div id="aimTxt"></div>
+      <button class="btn abBtn" id="abL" aria-label="方向逆時針微調">⟲</button>
+      <div id="aimPad" role="slider" aria-label="旋轉搖桿：往左右推轉動方向，推越多轉越快"><div id="aimKnob"></div></div>
+      <button class="btn abBtn" id="abR" aria-label="方向順時針微調">⟳</button>
+      <button class="btn primary" id="abOk">確定方向</button>
+    </div>
     <div id="slowBanner" hidden>決勝翻轉！</div>
     <canvas id="pip" hidden aria-label="追蹤畫面：出界與翻轉"></canvas>
     <div id="vbars" aria-hidden="true">
@@ -373,7 +399,7 @@ details.rtext summary { cursor: pointer; font-weight: 800; color: var(--text); m
       <li><b>同時解除狀態</b>：攻擊方自己和對手同時彈起 → 雙方都變色＝雙方 Safe；只有一方變色＝那一方 OUT；都沒變色＝雙方 Safe。</li>
       <li><b>出界開關</b>：標題畫面可關閉出界（撞框一律反彈、不會飛出界），適合新手或練習。</li>
       <li><b>電腦強度</b>：簡單／普通／強者／硬幣之神（標題畫面切換）。硬幣之神每次出手有 90% 機率發動「神之一擊」：必定打中你的弱點並啟動翻轉判定（落地顏色仍是 1/2），而且自己的金幣不翻面、不出界。</li>
-      <li><b>操作模式</b>：彈弓式（按住自己的金幣往後拉、放開發射）或點選式（點金幣 → 對準點一下 → 力量條點一下 → 精準度）。標題畫面或對戰中工具列都能切換（V 鍵）。</li>
+      <li><b>操作模式</b>：彈弓式（按住自己的金幣往後拉、放開發射）或點選式（點金幣 → 對準方向、按「確定方向」鎖定 → 力量條點一下 → 精準度；鎖定後點哪裡都不會改方向，下方有旋轉搖桿與 ⟲⟳ 可微調）。標題畫面或對戰中工具列都能切換（V 鍵）。</li>
       <li><b>全場限時</b>（專業 8 分鐘、簡易／標準 5 分鐘）：時間到時（等當下這一回合結束），比雙方開場金幣的 M 值合計，合計<b>較少</b>的一方獲勝；相同為平手。畫面左上顯示全場剩餘時間。</li>
       <li><b>發射</b>：點自己的金幣，按住畫面往反方向拉（像彈弓），拉越長越大力（上限 100%），放開後跑精準度條。每回合 18 秒內要完成出手，否則視同放棄、換對方進攻（畫面上方有倒數）。</li>
       <li><b>擊球</b>：① 點自己的金幣，再點一次確定 ② 移動滑鼠瞄準（←→ 微調）點擊確定 ③ 力量條 ④ 精準度條：中間綠區＝PERFECT 不偏；一離開綠區就至少偏 5°，越靠邊越大，最邊緣以發射方向為基準左右各偏 70°，並帶弧線。Space／Enter 也可確定。<b>輔助線</b>：青色＝自己路線、橘色＝對手被撞去向、綠色＝自己分開方向；按 H 或「輔助線」按鈕可關閉，改用三角箭頭瞄準。</li>
@@ -1539,11 +1565,11 @@ const GFX = (() => {
   el.addEventListener("contextmenu", e => e.preventDefault());
   el.addEventListener("pointerdown", e => {
     if (e.button === 2 || e.button === 1) { drag = {x: e.clientX, y: e.clientY}; el.setPointerCapture(e.pointerId); return; }
-    pick(e); try { el.setPointerCapture(e.pointerId); } catch (er) {} Input.click(mouse.x, mouse.z);
+    pick(e); try { el.setPointerCapture(e.pointerId); } catch (er) {} Input.click(mouse.x, mouse.z, e.pointerType);
   });
   el.addEventListener("pointermove", e => {
     if (drag) { cam.tTheta -= (e.clientX - drag.x) * 0.008; cam.tPhi = clamp(cam.tPhi - (e.clientY - drag.y) * 0.006, 0.02, 1.25); drag = {x: e.clientX, y: e.clientY}; cam.follow = false; return; }
-    pick(e); Input.move(mouse.x, mouse.z);
+    pick(e); Input.move(mouse.x, mouse.z, e.pointerType);
   });
   el.addEventListener("pointerup", e => { if (drag) { drag = null; return; } pick(e); Input.up(); });
   el.addEventListener("pointercancel", () => { drag = null; Input.up(); });
@@ -1717,17 +1743,19 @@ const Input = {
   // 後拉力量以螢幕距離計算：不管金幣在哪個角落、鏡頭什麼角度，都拉得到 100%
   pullPx() { return clamp(Math.min(innerWidth, innerHeight) * 0.22, 90, 200); },
   // 按下：選／點自己的金幣，或在任何地方按住開始「往後拉」
-  click(x, z) {
+  click(x, z, kind) {
     if (G.scene !== "battle" || G.phase === "over") return;
     const ph = G.phase;
     if (ph === "duel") { skipDuel(); return; }
     if (locked()) return;
     if (!CTRL.sling() && (ph === "select" || ph === "aim")) {
       for (const p of ownAlive()) if (Math.hypot(p.x - x, p.z - z) <= R + 0.6) { G.selected = p; G.phase = "aim"; G.power = 0; UI.refresh(); NET.aim(); return; }
-      if (ph === "aim" && G.selected) {                 // 點在別處＝朝那裡瞄準並開始力量條（手機用點的就能瞄準）
+      if (ph === "aim" && G.selected) {
+        if (kind === "mouse") { AimBar.confirm(); return; }      // 滑鼠：移動已經對準，點一下＝確定（不改方向）
+        // 手機／平板：點或拖曳只調整方向，按「確定方向」才鎖定（避免為了開始力量條而點偏方向）
         const dx = x - G.selected.x, dz = z - G.selected.z;
-        if (Math.hypot(dx, dz) > 0.6) G.aim = Math.atan2(dz, dx);
-        confirmAim(); NET.aim(true);
+        if (Math.hypot(dx, dz) > R * 0.6) { G.aim = Math.atan2(dz, dx); NET.aim(); }
+        this.touchAim = true;
       }
       return;
     }
@@ -1744,13 +1772,14 @@ const Input = {
       if (p) { if (Math.hypot(x - p.x, z - p.z) <= R + 0.4) orientConfirm(p.angle); else p.angle = Math.atan2(z - p.z, x - p.x); } }
     else if (ph === "place") place(x, z);
   },
-  move(x, z) {
+  move(x, z, kind) {
     if (G.scene === "battle" && G.phase === "orient" && !locked()) {
       const p = G.orientQueue[0];
       if (p && Math.hypot(x - p.x, z - p.z) > R * 0.6) { p.angle = Math.atan2(z - p.z, x - p.x); }
       return;
     }
-    if (!CTRL.sling() && G.scene === "battle" && G.phase === "aim" && !locked() && G.selected) {   // 點選式：方向跟著滑鼠
+    if (!CTRL.sling() && G.scene === "battle" && G.phase === "aim" && !locked() && G.selected) {   // 點選式：方向跟著滑鼠／按住的手指
+      if (kind && kind !== "mouse" && !this.touchAim) return;
       const dx = x - G.selected.x, dz = z - G.selected.z;
       if (Math.hypot(dx, dz) > R * 0.6) { G.aim = Math.atan2(dz, dx); NET.aim(); }
       return;
@@ -1766,6 +1795,7 @@ const Input = {
     }
   },
   up() {                                              // 放開：力量夠就進入精準度
+    this.touchAim = false;
     if (G.scene !== "battle" || locked() || G.phase !== "aim" || !G.pull) return;
     G.pull = null; Haptic.step = -1;
     if (G.power >= P.PULL_MIN) { Haptic.buzz(12); lockPower(); }
@@ -1786,7 +1816,7 @@ const Input = {
       else if (e.key === "ArrowUp") { e.preventDefault(); G.power = clamp(G.power + 0.05, 0, 1); NET.aim(); }
       else if (e.key === "ArrowDown") { e.preventDefault(); G.power = clamp(G.power - 0.05, 0, 1); NET.aim(); }
       else if (e.key === "Escape") { G.phase = "select"; G.pull = null; G.power = 0; UI.refresh(); }
-      else if (go && !CTRL.sling()) confirmAim();
+      else if (go && !CTRL.sling()) AimBar.confirm();
       else if (go && G.power >= P.PULL_MIN) lockPower();
     } else if (ph === "power" && go) lockPower();
     else if (ph === "accuracy" && go) lockAcc();
@@ -2149,6 +2179,52 @@ const PhaseBar = {
   },
 };
 window.PhaseBar = PhaseBar;
+// 點選式的瞄準列：確定方向（鎖定後才跑力量條）＋旋轉搖桿＋⟲⟳ 微調
+const AimBar = {
+  v: 0, hold: 0,
+  on() { return G.scene === "battle" && G.phase === "aim" && !CTRL.sling() && !locked() && !!G.selected && !G.spectate; },
+  update() {
+    const bar = $("aimBar"), on = this.on();
+    if (on && bar.hidden) this.shownAt = performance.now();     // 剛出現：同一下點擊的殘留事件不算按到按鈕
+    bar.hidden = !on; if (!on) { this.v = 0; this.hold = 0; return; }
+    const touch = matchMedia("(pointer: coarse)").matches;
+    $("aimTxt").innerHTML = `🎯 ${touch ? "點或拖曳畫面調方向" : "移動滑鼠對準"}，搖桿／⟲⟳ 微調<br>按 <b>確定方向</b> 鎖定 → 力量條（之後點哪裡都不會改方向） <span id="aimDeg"></span>`;
+    this.deg();
+  },
+  deg() { const d = $("aimDeg"); if (d) d.textContent = (Math.round(G.aim * 180 / Math.PI) % 360 + 360) % 360 + "°"; },
+  fresh() { return performance.now() - (this.shownAt || 0) < 400; },
+  confirm(fromBtn) {
+    if (fromBtn && this.fresh()) return;
+    if (!(G.scene === "battle" && G.phase === "aim" && !CTRL.sling() && !locked() && G.selected)) return;
+    this.v = 0; this.hold = 0; Haptic.buzz && Haptic.buzz(15);
+    confirmAim(); NET.aim(true);
+  },
+  turn(rad) { if (!this.on()) return; G.aim += rad; NET.aim(); this.deg(); },
+  tick(dt) {                                           // 每格：搖桿推幾成就轉多快；⟲⟳ 按住越久轉越快
+    if (!this.on()) return;
+    let w = this.v * Math.abs(this.v) * 1.8;            // 最快約 100°/秒，推一點點＝很慢，方便微調
+    if (this.hold) { this.holdT = (this.holdT || 0) + dt; if (this.holdT > 0.35) w += this.hold * Math.min(1.4, 0.15 + (this.holdT - 0.35) * 0.9); }
+    if (w) this.turn(w * dt);
+  },
+};
+window.AimBar = AimBar;
+(() => {
+  const pad = $("aimPad"), knob = $("aimKnob");
+  let pid = null;
+  const set = e => { const r = pad.getBoundingClientRect(), half = r.width / 2 - 20;
+    const dx = clamp(e.clientX - (r.left + r.width / 2), -half, half); AimBar.v = dx / half; knob.style.transform = `translateX(${dx}px)`; };
+  const end = () => { pid = null; AimBar.v = 0; pad.classList.remove("on"); knob.style.transform = ""; };
+  pad.addEventListener("pointerdown", e => { e.preventDefault(); e.stopPropagation(); if (AimBar.fresh()) return; pid = e.pointerId; try { pad.setPointerCapture(pid); } catch (er) {} pad.classList.add("on"); set(e); });
+  pad.addEventListener("pointermove", e => { if (e.pointerId === pid) { e.preventDefault(); set(e); } });
+  pad.addEventListener("pointerup", end); pad.addEventListener("pointercancel", end); pad.addEventListener("lostpointercapture", end);
+  for (const [id, d] of [["abL", -1], ["abR", 1]]) {
+    const b = $(id);
+    b.addEventListener("pointerdown", e => { e.preventDefault(); if (AimBar.fresh()) return; AimBar.turn(d * Math.PI / 360); AimBar.hold = d; AimBar.holdT = 0; });   // 點一下＝0.5°
+    for (const ev of ["pointerup", "pointerleave", "pointercancel"]) b.addEventListener(ev, () => { AimBar.hold = 0; });
+  }
+  $("abOk").addEventListener("pointerup", e => { e.preventDefault(); AimBar.confirm(true); });
+$("abOk").onclick = e => { if (e.detail === 0) AimBar.confirm(true); };        // 鍵盤 Enter／空白鍵
+})();
 $("pbL").onclick = () => PhaseBar.rot(-1);
 $("pbR").onclick = () => PhaseBar.rot(1);
 $("pbOk").onclick = () => { if (!locked() && G.phase === "orient" && G.orientQueue[0]) orientConfirm(G.orientQueue[0].angle); };
@@ -2379,7 +2455,7 @@ const Tut = {
   bar() {
     if (!G.tut) return;
     const L = this.LESSONS[G.tut.k], ph = G.phase;
-    const CB = {select: "點自己的金幣（下方那枚）", aim: "移動滑鼠／手指點對手方向，<b>點一下</b>開始力量條", power: G.tut.k ? "力量條到 <b>70% 以上</b>時點一下" : "力量條到 <b>40% 左右</b>時點一下"};
+    const CB = {select: "點自己的金幣（下方那枚）", aim: "對準對手方向，按下方 <b>確定方向</b> 鎖定（滑鼠可直接點一下）", power: G.tut.k ? "力量條到 <b>70% 以上</b>時點一下" : "力量條到 <b>40% 左右</b>時點一下"};
     $("tutBar").innerHTML = `第 ${G.tut.k + 1}/3 課｜` + ((!CTRL.sling() && CB[ph]) || L.bar[ph] || L.bar[ph === "power" ? "aim" : "moving"] || "");
   },
   passed() { return G.tut && (G.tut.k === 0 ? G.shooterHit : G.tut.popped); },
@@ -2427,13 +2503,14 @@ const UI = {
     const sl = CTRL.sling();
     const hints = {select: sl ? "① 點自己的金幣，按住往後拉、放開發射｜Tab 切換" : "① 點自己的金幣（點選式）｜Tab 切換",
       aim: sl ? "② 按住畫面往反方向拉（拉越長越大力），放開發射" + (RULES.spin ? "｜Z／X 旋轉" : "") + "｜鍵盤：←→ 方向、↑↓ 力量、Space 發射"
-              : "② 移動滑鼠（或手指點）對準方向，點一下開始力量條" + (RULES.spin ? "｜Z／X 旋轉" : "") + "｜←→ 微調",
+              : "② 對準方向（滑鼠移動／手指點或拖曳），按「確定方向」鎖定後才開始力量條" + (RULES.spin ? "｜Z／X 旋轉" : "") + "｜←→ 微調、Enter 確定",
       power: sl ? "③ 放開發射" : "③ 力量條：點畫面任何地方決定力量", accuracy: "④ 精準度：停在中間綠區＝PERFECT", moving: "金幣滑行中…", jump: "彈起翻轉中…",
       duel: "OX 對決！（點擊／Space 繼續）", orient: "重新放置：已放回撞擊前的位置，只能轉方向、不能移動（拖曳或 ⟲⟳ 轉向，點金幣或「確定」完成）", place: "放回場內：點任何空位放下（離其他金幣 1 枚以上，綠圈＝可放），⟲⟳ 或 Q／E 轉方向", over: "對戰結束"};
     const ac = actor();
     $("hint").textContent = ac.cpu && !["moving","jump","duel","over"].includes(G.phase) ? "電腦思考中…"
       : ac.remote && !["moving","jump","duel","over"].includes(G.phase) ? (G.phase === "sync" ? "同步對手結果中…" : ["orient", "place"].includes(G.phase) ? `等待 ${ac.name} 重新放置金幣…` : "對手回合，等待對手出手…") : (hints[G.phase] || "");
     if (window.PhaseBar) window.PhaseBar.update();
+    if (window.AimBar) window.AimBar.update();
     $("spinTxt").textContent = spinLabel(G.spinLvl || 0);
     $("spinBar").hidden = !RULES.spin;
     { const z = perfZone() * 100; $("accSweet").style.top = (50 - z / 2) + "%"; $("accSweet").style.height = z + "%"; }
@@ -2693,7 +2770,8 @@ $("duel").addEventListener("pointerdown", () => { if (G.phase === "duel") skipDu
   document.addEventListener("selectstart", e => { if (!e.target.closest || !e.target.closest("input, textarea")) e.preventDefault(); });
   for (const ev of ["gesturestart", "gesturechange"]) document.addEventListener(ev, e => e.preventDefault(), {passive: false});
   let lastTap = 0;                                       // iOS 連點兩下會放大畫面 → 擋掉
-  st.addEventListener("touchend", e => { const t = Date.now(); if (t - lastTap < 320) e.preventDefault(); lastTap = t; }, {passive: false});
+  st.addEventListener("touchend", e => { if (e.target.closest && e.target.closest("button, input, select, a")) return;   // 按鈕連點不能被吃掉
+    const t = Date.now(); if (t - lastTap < 320) e.preventDefault(); lastTap = t; }, {passive: false});
 })();
 // 精準度跑條：手指／滑鼠點在畫面任何地方都算（按鈕、輸入框、開著的視窗除外）
 document.addEventListener("pointerdown", e => {
@@ -2797,6 +2875,7 @@ function frame(now) {
   UI.tick();
   GFX.render(dt);
   try { PIP.draw(dt); } catch (e) {}
+  try{AimBar.tick(dt); if ($("aimBar").hidden === AimBar.on()) AimBar.update();}catch(e){}
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

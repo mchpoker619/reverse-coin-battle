@@ -31,10 +31,10 @@ const GFX = (() => {
     return mouse;
   }
   cv.addEventListener("contextmenu", e => e.preventDefault());
-  cv.addEventListener("pointerdown", e => { if (e.button !== 0) return; pick(e); try { cv.setPointerCapture(e.pointerId); } catch (er) {} Input.click(mouse.x, mouse.z); });
+  cv.addEventListener("pointerdown", e => { if (e.button !== 0) return; pick(e); try { cv.setPointerCapture(e.pointerId); } catch (er) {} Input.click(mouse.x, mouse.z, e.pointerType); });
   cv.addEventListener("pointerup", e => { pick(e); Input.up(); });
   cv.addEventListener("pointercancel", () => Input.up());
-  cv.addEventListener("pointermove", e => { pick(e); Input.move(mouse.x, mouse.z); });
+  cv.addEventListener("pointermove", e => { pick(e); Input.move(mouse.x, mouse.z, e.pointerType); });
 
   function clack() {}
   function buildPieces() { for (const p of G.pieces) { p.mesh = true; p.label = {hidden: true}; } }
