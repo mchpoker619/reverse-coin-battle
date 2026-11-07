@@ -371,6 +371,12 @@ button { touch-action: manipulation; }
         <button class="btn" id="ruleHouse">規則：isn_ver.1 自訂</button>
       </div>
       <p class="assetNote" id="ruleNote"></p>
+      <p class="menuLbl">場地大小（開局前選定，對戰中不能更改；線上對戰雙方要相同）</p>
+      <div class="row2">
+        <button class="btn" id="fA2" aria-pressed="false">場地：A2（420×594 mm）</button>
+        <button class="btn" id="fA3" aria-pressed="false">場地：A3（297×420 mm）</button>
+      </div>
+      <p class="assetNote" id="fieldNote"></p>
       <p class="menuLbl">模式</p>
       <div class="row2">
         <button class="btn big primary" id="btnPvP">雙人對戰（同一台電腦）</button>
@@ -434,7 +440,7 @@ button { touch-action: manipulation; }
       <li><b>攻擊方</b>：出手的金幣自己出界 → 淘汰。<b>官方（預設）</b>：自爆翻成對方色、自己的金幣（含隊友）在自己回合出界，都是自滅 OUT。<b>isn_ver.1 自訂</b>：這兩種不淘汰。彈起仍是自己顏色 → セーフ，原地重新鎖定。</li>
       <li><b>防守方</b>：出界沒彈起 → Safe，由主人放回場內任何位置；翻成對方顏色 → 淘汰；彈起仍是自己顏色 → 比 OX，攻擊方較高才淘汰（平手守方勝），存活的由主人放回撞擊前的位置（場外的放回場內任何位置）。</li>
       <li><b>メタ幣</b>：被打到彈起時中央核心會翻面，OX 對決看<b>翻面後</b>的數值（例：レオウ白面 8000 被打彈起 → 用黑面 4000 比）。</li>
-      <li><b>場地</b>：A2 420×594 mm（官方 A3 バリ場等比例放大），金幣直徑 43 mm、厚 8 mm。<b>勝利</b>：淘汰對手全部 3 枚。</li>
+      <li><b>場地</b>：開局前選 A2 420×594 mm（官方 A3 バリ場等比例放大）或 A3 297×420 mm；對戰中不能改，線上對戰雙方要相同；金幣直徑 43 mm、厚 8 mm。<b>勝利</b>：淘汰對手全部 3 枚。</li>
     </ul>
     </details>
     <button class="btn big" id="btnRulesBack">返回</button>
@@ -601,13 +607,20 @@ RULES.spin = true;
 try { const v = localStorage.getItem("rcb-spin"); if (v === "0") RULES.spin = false; } catch (e) {}
 
 // ======================================================================== 物理參數（單位：cm、秒）
-const W = 42.0, H = 59.4;          // A2 場地 420×594 mm（官方 A3 バリ場等比例放大 √2）
+// 場地大小：A2 420×594 mm（官方 A3 等比例放大 √2）或 A3 297×420 mm（官方バリ場原尺寸）；開局前在「開始遊戲」選
+const FIELD = {size: (() => { try { return localStorage.getItem("rcb-field") === "A3" ? "A3" : "A2"; } catch (e) { return "A2"; } })()};
+let W = 42.0, H = 59.4;
 const R = 2.15, T = 0.8;           // 金幣直徑 43 mm、厚 8 mm
 const RAIL_T = 1.6, RAIL_H = 1.2;  // 邊框厚度、高度
 // 香港大賽規則：自己的金幣直線間隔 1 枚（中心距 2 枚＝8.6）、與對手間隔 6 枚（中心距 7 枚＝30.1）
 // 香港大賽擺放規則不變：自己的金幣間隔 1 枚、與對手間隔 6 枚（以 cm 絕對距離換算成場地比例）
-const START_X = [0.5 - 8.6 / W, 0.5, 0.5 + 8.6 / W];
-const START_Y = {top: 0.5 - 15.05 / H, bottom: 0.5 + 15.05 / H};
+let START_X, START_Y;
+function applyFieldDims() {
+  [W, H] = FIELD.size === "A3" ? [29.7, 42.0] : [42.0, 59.4];
+  START_X = [0.5 - 8.6 / W, 0.5, 0.5 + 8.6 / W];
+  START_Y = {top: 0.5 - 15.05 / H, bottom: 0.5 + 15.05 / H};
+}
+applyFieldDims();
 const P = {
   FRICTION: 40.58, VMIN: 17.6, VMAX: 83.9,  // 場地摩擦 +3%（原 39.4）；力量整體＋10%、低力量也推得動
   OUT_SPEED: 40.82,  /* 出界門檻再 +30%（原 31.4） */               // 垂直撞向邊框 ≥ 此速度 → 飛出界（必定大於翻轉門檻 UNLOCK）
@@ -1345,19 +1358,27 @@ const GFX = (() => {
   outFloor.rotation.x = -Math.PI/2; outFloor.position.y = -0.03; outFloor.receiveShadow = true; scene.add(outFloor);
   const fieldTex = new THREE.CanvasTexture(genField()); fieldTex.encoding = THREE.sRGBEncoding; fieldTex.anisotropy = 8;
   const fieldMat = new THREE.MeshStandardMaterial({map: fieldTex, roughness: 0.85});
-  const fieldMesh = new THREE.Mesh(new THREE.PlaneGeometry(W, H), fieldMat);
-  fieldMesh.rotation.x = -Math.PI/2; fieldMesh.receiveShadow = true; scene.add(fieldMesh);
+  const tableGrp = new THREE.Group(); scene.add(tableGrp);           // 場地＋邊框（換 A2／A3 時重建）
   const wood = new THREE.MeshStandardMaterial({color: new THREE.Color(0x5a3d27).convertSRGBToLinear(), roughness: 0.6});
   const cushion = new THREE.MeshStandardMaterial({color: new THREE.Color(0x2e2840).convertSRGBToLinear(), roughness: 0.8});
   // 墊子在下、木條蓋在上方（不重疊、不共面，避免邊緣閃動）
   function rail(w, h, d, x, z, tw, td) {
-    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), cushion); m.position.set(x, h/2, z); m.castShadow = m.receiveShadow = true; scene.add(m);
-    const top = new THREE.Mesh(new THREE.BoxGeometry(tw, 0.25, td), wood); top.position.set(x, h + 0.125, z); top.castShadow = true; scene.add(top);
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), cushion); m.position.set(x, h/2, z); m.castShadow = m.receiveShadow = true; tableGrp.add(m);
+    const top = new THREE.Mesh(new THREE.BoxGeometry(tw, 0.25, td), wood); top.position.set(x, h + 0.125, z); top.castShadow = true; tableGrp.add(top);
   }
-  rail(RAIL_T, RAIL_H, H + 2*RAIL_T, -W/2 - RAIL_T/2, 0, RAIL_T + 0.08, H + 2*RAIL_T + 0.08);
-  rail(RAIL_T, RAIL_H, H + 2*RAIL_T, W/2 + RAIL_T/2, 0, RAIL_T + 0.08, H + 2*RAIL_T + 0.08);
-  rail(W - 0.002, RAIL_H, RAIL_T, 0, -H/2 - RAIL_T/2, W - 0.1, RAIL_T + 0.08);
-  rail(W - 0.002, RAIL_H, RAIL_T, 0, H/2 + RAIL_T/2, W - 0.1, RAIL_T + 0.08);
+  function buildTable() {
+    for (const c of [...tableGrp.children]) { tableGrp.remove(c); if (c.geometry) c.geometry.dispose(); }
+    const fieldMesh = new THREE.Mesh(new THREE.PlaneGeometry(W, H), fieldMat);
+    fieldMesh.rotation.x = -Math.PI/2; fieldMesh.receiveShadow = true; tableGrp.add(fieldMesh);
+    rail(RAIL_T, RAIL_H, H + 2*RAIL_T, -W/2 - RAIL_T/2, 0, RAIL_T + 0.08, H + 2*RAIL_T + 0.08);
+    rail(RAIL_T, RAIL_H, H + 2*RAIL_T, W/2 + RAIL_T/2, 0, RAIL_T + 0.08, H + 2*RAIL_T + 0.08);
+    rail(W - 0.002, RAIL_H, RAIL_T, 0, -H/2 - RAIL_T/2, W - 0.1, RAIL_T + 0.08);
+    rail(W - 0.002, RAIL_H, RAIL_T, 0, H/2 + RAIL_T/2, W - 0.1, RAIL_T + 0.08);
+    Object.assign(sun.shadow.camera, {left: -W/2 - 10, right: W/2 + 10, top: H/2 + 10, bottom: -H/2 - 10});
+    sun.shadow.camera.updateProjectionMatrix();
+  }
+  buildTable();
+  function setField() { buildTable(); fieldTex.image = genField(); fieldTex.needsUpdate = true; resize(); }
 
   // 金幣材質
   const texCache = {};
@@ -1734,7 +1755,7 @@ const GFX = (() => {
   }
   resize();
   function toScreen(x, z) { const v = new THREE.Vector3(x, 0, z).project(camera), r = renderer.domElement.getBoundingClientRect(); return [r.left + (v.x + 1) / 2 * r.width, r.top + (1 - v.y) / 2 * r.height]; }
-  return {render, buildPieces, refreshTextures, followTurn, setMode, resize, clack, cam, renderer, camera, mouse, toScreen, screen: screenPt};
+  return {render, buildPieces, refreshTextures, followTurn, setMode, resize, clack, cam, renderer, camera, mouse, toScreen, setField, screen: screenPt};
 })();
 window.GFX = GFX;
 
@@ -1968,7 +1989,7 @@ const NET = {
     const peer = this.peer = new Peer(this.PREFIX + code, this.opts());
     peer.on("open", () => {
       $("netCode").textContent = code; $("netHostBox").hidden = false;
-      const link = NET.shareBase() + "#join-" + code;
+      const link = NET.shareBase() + "#join-" + code + "-" + FIELD.size;
       $("netLink").value = link;
       $("netWatchLink").value = NET.shareBase() + "#watch-" + code;
       this.status("房間已建立，把房號或連結傳給朋友，等待加入…");
@@ -1991,7 +2012,7 @@ const NET = {
       if (!cli || this.code_ !== code) return;
       if ($("netCode").textContent !== code) {            // 點對點伺服器連不上時，也能靠中繼開房
         $("netCode").textContent = code; $("netHostBox").hidden = false;
-        $("netLink").value = NET.shareBase() + "#join-" + code;
+        $("netLink").value = NET.shareBase() + "#join-" + code + "-" + FIELD.size;
         $("netWatchLink").value = NET.shareBase() + "#watch-" + code;
         this.status("房間已建立，把房號或連結傳給朋友，等待加入…");
       }
@@ -2054,14 +2075,30 @@ const NET = {
       this.on = true; this.q = []; this.teams = [null, null];
       this.prevGuide = UI.guide; UI.setGuide(false); $("camGuide").disabled = true; $("camGuide").title = "線上對戰只能用輔助線關閉模式";
       this.status(c.relay ? "已連線！（中繼模式）" : "已連線！");
-      if (this.seat === 0) this.send({t: "hello", rules: RULES.mode, spin: RULES.spin, noOut: !!RULES.noOut});
-      setTimeout(() => this.startBuild(), 300);
+      this.mismatch = false;
+      if (this.seat === 0) this.send({t: "hello", rules: RULES.mode, spin: RULES.spin, noOut: !!RULES.noOut, field: FIELD.size});
+      else this.send({t: "field", field: FIELD.size});
+      setTimeout(() => { if (!this.mismatch) this.startBuild(); }, 300);
     });
     c.on("data", m => { if (this.conn === c) this.recv(m); });   // 被換掉的舊連線（卡住的點對點）不再作用
     c.on("close", () => { if (this.conn === c) this.lost(); });
     c.on("error", () => { if (this.conn === c) this.lost(); });
   },
+  // 場地大小不同 → 不開始對戰、斷線，兩邊都看到說明
+  fieldMismatch(other) {
+    if (this.mismatch) return;
+    this.mismatch = true;
+    const mine = FIELD.size;
+    this.send({t: "field", field: mine});
+    setTimeout(() => {
+      this.on = false; this.restoreGuide();
+      try { this.conn && this.conn.close(); } catch (e) {}
+      this.close();
+      alertBox(`場地大小不同，無法連線對戰：你是 ${mine}、對手是 ${other}。線上對戰雙方要選同一種場地 → 回「開始遊戲」把場地改成 ${other}（或請對手改成 ${mine}）後重新建立／加入房間。`);
+    }, 250);
+  },
   lost() {
+    if (this.mismatch) return;
     if (!this.on) return;
     this.on = false; this.restoreGuide();
     addLog("對手已離線，線上對戰結束");
@@ -2087,7 +2124,10 @@ const NET = {
   },
   recv(m) {
     if (!m || typeof m !== "object") return;
-    if (m.t === "hello") { setRule(["house", "easy", "standard"].includes(m.rules) ? m.rules : "official"); setSpinMode(!!m.spin); setNoOut(!!m.noOut); return; }
+    if (m.t === "hello") {
+      if (m.field && m.field !== FIELD.size) return this.fieldMismatch(m.field);
+      setRule(["house", "easy", "standard"].includes(m.rules) ? m.rules : "official"); setSpinMode(!!m.spin); setNoOut(!!m.noOut); return; }
+    if (m.t === "field") { if (m.field && m.field !== FIELD.size) this.fieldMismatch(m.field); return; }
     if (m.t === "team") { this.teams[1 - this.seat] = (m.ids || []).filter(id => BY_ID[id]).slice(0, 3); this.teamsReady(); return; }
     if (m.t === "rps") { this.showRPS(m.a, m.b); return; }
     if (m.t === "matchend") { if (G.scene === "battle") matchTimeUp(true); return; }
@@ -2273,7 +2313,7 @@ const Watch = {
   },
   view() {
     const battle = G.scene === "battle" && NET.on;
-    const v = {t: "view", sc: battle ? "battle" : "wait"};
+    const v = {t: "view", sc: battle ? "battle" : "wait", f: FIELD.size};
     if (!battle) { v.msg = NET.on ? "雙方組隊、猜拳中…" : "等待對手加入房間…"; return v; }
     Object.assign(v, {n: G.turnNo, ph: G.phase, turn: G.turn, jt: G.jumpT || 0, mt: G.matchT, tt: G.turnT, aim: G.aim, pw: G.power, acc: G.acc,
       sel: G.pieces.indexOf(G.selected), spin: G.spinLvl || 0, w: G.winner, tr: G.timeResult, st: G.stats, rule: RULES.mode, spn: RULES.spin,
@@ -2345,6 +2385,7 @@ const Watch = {
   recv(v) {
     if (!v || v.t !== "view") return;
     this.gotView = true;
+    if (v.f && v.f !== FIELD.size) setField(v.f, true);            // 觀眾不參賽：直接換成房主的場地
     if (v.sc !== "battle") {
       if (G.spectate && G.phase !== "over") { G.spectate = false; $("watchBadge").hidden = true; }
       if (!G.spectate) { $("netWaitTxt").textContent = "觀戰中：" + (v.msg || "等待開始…"); $("netWaitBack").hidden = false; if ($("netWait").hidden) UI.show("netWait"); }
@@ -2721,6 +2762,18 @@ function setRule(m) {
     ? "isn_ver.1：攻擊方彈起翻成對方色不淘汰、隊友被撞出界由攻擊方放回。"
     : "專業 3V3（香港大賽）：每方 3 枚、OX 合計 ≤ 15,000、限時 8 分鐘；Safe 由金幣主人重新放置並決定方向。";
 }
+function setField(sz, force) {
+  sz = sz === "A3" ? "A3" : "A2";
+  if (!force && (G.scene === "battle" || (window.NET && NET.on))) return false;     // 對戰中／已連線：不能改
+  const changed = sz !== FIELD.size;
+  FIELD.size = sz; applyFieldDims();
+  try { localStorage.setItem("rcb-field", sz); } catch (e) {}
+  for (const [id, v] of [["fA2", "A2"], ["fA3", "A3"]]) { const b = $(id); if (b) b.setAttribute("aria-pressed", sz === v); }
+  const n = $("fieldNote"); if (n) n.textContent = sz === "A3" ? "A3：官方バリ場原尺寸，金幣剛好在圖紙印的圓圈裡，比較容易出界。" : "A2：場地放大 √2 倍，擺放距離不變（圖紙圓圈會在金幣外側一點），比較不容易出界。";
+  if (changed && window.GFX && GFX.setField) GFX.setField();
+  if (changed && G.scene !== "battle" && window.layoutDemo) layoutDemo();
+  return true;
+}
 function setNoOut(on) {
   RULES.noOut = !!on;
   try { localStorage.setItem("rcb-noout", on ? "1" : "0"); } catch (e) {}
@@ -2798,7 +2851,7 @@ $("reportShare").onclick = () => { if (Report.file) navigator.share({files: [Rep
 $("netJoinCode").addEventListener("keydown", e => { e.stopPropagation(); if (e.key === "Enter") NET.join(e.target.value); });
 $("netBack").onclick = $("netWaitBack").onclick = () => { NET.close(); Watch.stop(); $("netWaitBack").hidden = true; G.scene = "title"; UI.show("title"); };
 $("netCopy").onclick = () => { const v = $("netLink").value; (navigator.clipboard ? navigator.clipboard.writeText(v) : Promise.reject()).then(() => NET.status("連結已複製，貼給朋友就好！")).catch(() => { $("netLink").select(); NET.status("請長按／Ctrl+C 複製連結"); }); };
-{ const h = location.hash.match(/^#join-([A-Za-z0-9]{4,8})$/); if (h) setTimeout(() => { $("btnOnline").click(); $("netJoinCode").value = h[1].toUpperCase(); NET.join(h[1]); }, 600); }
+{ const h = location.hash.match(/^#join-([A-Za-z0-9]{4,8})(?:-(A2|A3))?$/); if (h) setTimeout(() => { if (h[2]) setField(h[2]); $("btnOnline").click(); $("netJoinCode").value = h[1].toUpperCase(); NET.join(h[1]); }, 600); }
 { const h = location.hash.match(/^#watch-([A-Za-z0-9]{4,8})$/); if (h) setTimeout(() => { $("btnOnline").click(); $("netJoinCode").value = h[1].toUpperCase(); Watch.join(h[1]); }, 600); }
 $("duel").addEventListener("pointerdown", () => { if (G.phase === "duel") skipDuel(); });
 // 手機：遊戲畫面裡的長按、拖曳、雙指縮放都不要動到網頁本身
@@ -2823,6 +2876,9 @@ $("camTop").onclick = () => GFX.setMode("top");
 $("camGuide").onclick = () => UI.setGuide(!UI.guide);
 $("tCpu").onclick = () => CPU.next();
 $("tOut").onclick = () => setNoOut(!RULES.noOut);
+$("fA2").onclick = () => setField("A2");
+$("fA3").onclick = () => setField("A3");
+setField(FIELD.size, true);
 setNoOut(RULES.noOut);
 CPU.sync();
 $("camCtrl").onclick = $("tCtrl").onclick = () => CTRL.set(CTRL.sling() ? "click" : "sling");
@@ -2926,7 +2982,12 @@ if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { AS
 G.players = [newPlayer("玩家 1"), newPlayer("玩家 2")];
 G.players[0].camp = "X"; G.players[1].camp = "O";
 G.players[0].team = PRESETS[0][1].slice(); G.players[1].team = PRESETS[1][1].slice();
+function layoutDemo() {
 G.pieces = []; G.players.forEach((pl, t) => { pl.side = pl.camp === "O" ? "top" : "bottom"; const z = -H/2 + START_Y[pl.side]*H; pl.team.forEach((id, k) => G.pieces.push(makePiece(BY_ID[id], t, pl.camp, -W/2 + START_X[k]*W, z, pl.side === "bottom" ? 0 : Math.PI))); });
-GFX.buildPieces(); GFX.cam.tTheta = 0.5;
-window.__RCB = {Menu, AimBar, actor, locked, setRule, teamMax, matchTime, setNoOut, PIP, CPU, Relay, CTRL, Tut, Watch, Report, Haptic, SFX, predictPath, accErr, perfZone, G, P, RULES, physics, collide, railBounce, startResolve, applyResults, afterResults, startBattle, beginTurn, update, placeValid, place, confirmSelect, confirmAim, lockPower, lockAcc, newPlayer, PRESETS, BY_ID, COINS, R, W, H, UI, GFX, pval, skipDuel};
+GFX.buildPieces();
+}
+window.layoutDemo = layoutDemo;
+layoutDemo(); GFX.cam.tTheta = 0.5;
+window.__RCB = {FIELD, setField, Menu, AimBar, actor, locked, setRule, teamMax, matchTime, setNoOut, PIP, CPU, Relay, CTRL, Tut, Watch, Report, Haptic, SFX, predictPath, accErr, perfZone, G, P, RULES, physics, collide, railBounce, startResolve, applyResults, afterResults, startBattle, beginTurn, update, placeValid, place, confirmSelect, confirmAim, lockPower, lockAcc, newPlayer, PRESETS, BY_ID, COINS, R, UI, GFX, pval, skipDuel};
+Object.defineProperties(window.__RCB, {W: {get: () => W, enumerable: true}, H: {get: () => H, enumerable: true}, START_X: {get: () => START_X}, START_Y: {get: () => START_Y}});   // 場地大小可換：用即時值
 </script>

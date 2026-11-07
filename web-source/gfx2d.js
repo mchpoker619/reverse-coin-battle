@@ -241,5 +241,6 @@ const GFX = (() => {
   }
   resize();
   function toScreen(x, z) { const r = cv.getBoundingClientRect(); return [r.left + sx(x), r.top + sy(z)]; }
-  return {render, buildPieces, refreshTextures, followTurn, setMode, resize, clack, cam, mouse, toScreen, screen: screenPt};
+  function setField() { genFieldCv = null; resize(); }
+  return {render, buildPieces, refreshTextures, followTurn, setMode, resize, clack, cam, mouse, toScreen, setField, screen: screenPt};
 })();
