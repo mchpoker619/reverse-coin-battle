@@ -52,7 +52,7 @@ def match_time():
     return 300.0 if RULE_MODE in ("easy", "standard") else MATCH_TIME   # 簡易／標準 5 分鐘、專業 8 分鐘
 DUEL_TIME = 2.4                         # 每張 OX 對決畫面顯示秒數
 FLIP_CHANCE = 0.5                       # 彈起翻轉後落地換成對方顏色的機率（正反各 1/2）
-FRICTION = 669.5 * LEN_S                        # 滑行減速 px/s²（場地摩擦 +3%，原 650）
+FRICTION = 649.415 * LEN_S                      # 滑行減速 px/s²（場地摩擦 −3%，原 669.5）
 COIN_REST = 0.98                        # 金幣互撞回彈係數（撞球約 0.93～0.98）
 # 旋轉（撞球式）：單位 rad/s，金幣當均勻圓盤（轉動慣量 I = ½ m R²）
 SPIN_STEP = 8.75                        # 出手旋轉每段角速度（左右各 3 段）
@@ -70,7 +70,7 @@ TURN_TIME = 30.0                        # 每回合出手限時（秒），超�
 MATCH_TIME = 480.0                      # 全場 8 分鐘：時間到比開場隊伍 M 值合計，少的一方獲勝
 SPIN_PERF = 0.2                         # 每加 1 段旋轉，PERFECT 區縮小 20%（3 段剩 40%）
 VMIN, VMAX = 290.0 * LEN_S, 1386.0 * LEN_S           # 力量整體＋10%、低力量也推得動（原 160～1260）              # 力量 0%～100% 的初速
-SPOT_HALF = math.radians(14.112)   # 弱點 ±14.1°（13.44° 再加大 5%）           # リバースポット半角（開關側與對側各一）
+SPOT_HALF = math.radians(14.8176)  # 弱點 ±14.8°（14.112° 再加大 5%）           # リバースポット半角（開關側與對側各一）
 UNLOCK_RAIL = 322.0 * LEN_S                     # 弱點撞「邊框」的翻轉門檻（維持不變）
 UNLOCK_SPEED = 296.24 * LEN_S                    # 翻轉力道：リバースポット受到的撞擊速度 ≥ 此值才會彈起（金幣互撞、撞邊框皆同）
 ACC_MAX_ERR = math.radians(70)          # 精準度條最邊緣：以發射方向為基準左右各偏 70°
@@ -78,7 +78,8 @@ ACC_CURVE = 400.0 * LEN_S                       # 精準度偏差造成的側向
 MISS_MIN = 5 / 70                       # 沒按進 PERFECT 區至少偏 5°
 AIM_COL, TGT_COL, CUT_COL = (24, 224, 255), (255, 138, 0), (125, 255, 58)   # 輔助線：青／橘／綠
 PERFECT = 0.07
-FIELD_SIZE = "A2"                       # 場地大小：開局前在「開始遊戲」選 A2／A3，對戰中不能改
+FIELD_SIZE = "A3"                       # 場地大小：開局前在「開始遊戲」選，對戰中不能改
+FIELD_A2_ENABLED = False                # 目前只開放 A3；A2 程式保留，改成 True 就會重新出現選項
 
 
 def set_field(size):
@@ -93,7 +94,7 @@ def set_field(size):
     R = round(COIN_MM * MM / 2)
     START_X = (0.5 - 86 / FIELD_W_MM, 0.5, 0.5 + 86 / FIELD_W_MM)
     START_Y = {"top": 0.5 - 150.5 / FIELD_H_MM, "bottom": 0.5 + 150.5 / FIELD_H_MM}
-    OUT_SPEED, FRICTION = 672.75 * LEN_S, 669.5 * LEN_S
+    OUT_SPEED, FRICTION = 672.75 * LEN_S, 649.415 * LEN_S
     VMIN, VMAX = 290.0 * LEN_S, 1386.0 * LEN_S
     UNLOCK_RAIL, UNLOCK_SPEED = 322.0 * LEN_S, 296.24 * LEN_S
     ACC_CURVE = 400.0 * LEN_S
@@ -390,10 +391,11 @@ class Game:
         back = Button((cx - 160, 680, 320, 52), "← 返回", lambda: self.goto_title("main"), size=22)
         if page == "play":
             self.buttons = [
+            ] + ([
                 Button((cx - 160, 422, 155, 46), "場地：A2", lambda: self.pick_field("A2"), size=19,
                        color=(78, 52, 150) if FIELD_SIZE == "A2" else None),
                 Button((cx + 5, 422, 155, 46), "場地：A3", lambda: self.pick_field("A3"), size=19,
-                       color=(78, 52, 150) if FIELD_SIZE == "A3" else None),
+                       color=(78, 52, 150) if FIELD_SIZE == "A3" else None)] if FIELD_A2_ENABLED else []) + [
                 Button((cx - 160, 360, 320, 52), {"official": "規則：專業 3V3（8 分鐘）", "standard": "規則：標準 1V1（5 分鐘）",
                                                   "easy": "規則：簡易 1V1（5 分鐘）"}[RULE_MODE] + "　點一下切換",
                        self.toggle_easy, size=18, color=(40, 80, 60) if RULE_MODE != "official" else None),
@@ -462,6 +464,8 @@ class Game:
         self.goto_title()
 
     def pick_field(self, size):
+        if size == "A2" and not FIELD_A2_ENABLED:
+            return
         if self.scene == "title":                        # 只有開局前（主選單）能選，對戰中沒有這個按鈕
             set_field(size)
             self.goto_title()
@@ -1478,7 +1482,16 @@ class Game:
                 and not self.actor().cpu)
 
     def screen_dir(self):
-        """角度變大時，發射方向的箭頭往畫面哪邊移：+1＝右、−1＝左（往上打和往下打相反）。"""
+        """角度變大時，發射方向的箭頭往畫面哪邊移：+1＝右、−1＝左（往上打和往下打相反）。
+        同一次瞄準只決定一次（以「朝對面」為基準），繞 360° 也不會在水平方向反向卡住。"""
+        key = (self.turn, id(self.selected))
+        if getattr(self, "_dir_key", None) == key:
+            return self._dir_val
+        ref = -math.pi / 2 if self.selected and self.selected.pos.y > FIELD.centery else math.pi / 2
+        dx, dy = -math.sin(ref), math.cos(ref)
+        self._dir_key = key
+        self._dir_val = 1 if dx > 0 else -1
+        return self._dir_val
         dx, dy = -math.sin(self.aim), math.cos(self.aim)
         if abs(dx) >= 0.3 * abs(dy):
             return 1 if dx > 0 else -1
@@ -1576,7 +1589,8 @@ class Game:
         text(s, "官方說明書 Ver.1.1.2 エキスパートルール・全 101 枚金幣", (SW // 2, 284), 22, COL["dim"], "center")
         text(s, WATERMARK, (SW // 2, 322), 22, (255, 107, 125), "center", True)
         if getattr(self, "title_page", "main") == "play":
-            text(s, "場地：A2 420×594 mm／A3 297×420 mm（官方圖紙原尺寸），開局前選定，對戰中不能更改", (SW // 2, 642), 16, COL["dim"], "center")
+            text(s, ("場地：A2 420×594 mm／A3 297×420 mm（官方圖紙原尺寸），開局前選定，對戰中不能更改" if FIELD_A2_ENABLED
+                     else "場地：A3 297×420 mm（官方バリ場原尺寸）"), (SW // 2, 642), 16, COL["dim"], "center")
         self.draw_coin_at(Vector2(SW // 2 - 380, 150), "O", BY_ID["v1o-bbr"], 1.4, 0)
         self.draw_coin_at(Vector2(SW // 2 + 380, 150), "X", BY_ID["v1x-bbr"], 1.4, math.pi)
 
