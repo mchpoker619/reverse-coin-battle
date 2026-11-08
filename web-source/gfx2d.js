@@ -113,6 +113,9 @@ const GFX = (() => {
   function render(dt) {
     if (stage.clientWidth !== cw || stage.clientHeight !== ch) resize();
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.fillStyle = "#d8cdb8"; ctx.fillRect(0, 0, cw, ch);
+    const shk = window.FX ? FX.shake : 0;                // 撞擊震動：整個畫面小幅抖動
+    if (shk > 0.01) ctx.setTransform(dpr, 0, 0, dpr, (Math.random() - 0.5) * shk * 12 * dpr, (Math.random() - 0.5) * shk * 12 * dpr);
     // 桌面
     ctx.fillStyle = "#d8cdb8"; ctx.fillRect(0, 0, cw, ch);
     // 邊框
@@ -238,6 +241,31 @@ const GFX = (() => {
       drawCoin(p, mouse.x, mouse.z, {alpha: 0.6, rot: p.home + (G.placeRot || 0)});
       ring(mouse.x, mouse.z, 2 * R, placeValid(mouse.x, mouse.z, p) ? "#4ade80" : "#f87171", 0.18 * k);
     }
+    drawFX();
+  }
+  // 撞擊特效：衝擊波圈＋火花
+  function drawFX() {
+    if (!window.FX || !FX.sparks.length) return;
+    ctx.save();
+    for (const f of FX.sparks) {
+      const u = f.t / f.life, hot = f.kind === "coin" && f.k > 0.9, x = sx(f.x), y = sy(f.z);
+      const col = f.kind === "rail" ? "#ffc23a" : hot ? "#ff3d1f" : "#ffa02a";
+      if (u < 0.3 && f.kind === "coin") {               // 撞擊瞬間的白色閃光
+        const rr = R * k * (1 + f.k), gr = ctx.createRadialGradient(x, y, 0, x, y, rr);
+        gr.addColorStop(0, "rgba(255,255,255,.95)"); gr.addColorStop(0.5, "rgba(255,230,150,.6)"); gr.addColorStop(1, "rgba(255,200,80,0)");
+        ctx.globalAlpha = (1 - u / 0.3) * Math.min(1, 0.4 + f.k); ctx.fillStyle = gr; ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI * 2); ctx.fill();
+      }
+      const rad = R * k * (0.9 + u * (1.4 + 1.8 * f.k)), lw = Math.max(2, (0.45 + 0.45 * f.k) * k * (1 - u));
+      ctx.globalAlpha = (1 - u) * Math.min(1, 0.55 + f.k * 0.5);
+      ctx.strokeStyle = "rgba(40,20,0,.55)"; ctx.lineWidth = lw + 2; ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 1 - u; ctx.lineCap = "round"; ctx.lineWidth = Math.max(2, (0.22 + 0.25 * Math.min(1, f.k)) * k);
+      for (const d of f.dirs) {                          // 火花：往外飛的短線
+        const t1 = f.t, t0 = Math.max(0, f.t - 0.05);
+        ctx.strokeStyle = col; ctx.beginPath(); ctx.moveTo(sx(f.x + d[0] * t0), sy(f.z + d[1] * t0)); ctx.lineTo(sx(f.x + d[0] * t1), sy(f.z + d[1] * t1)); ctx.stroke();
+      }
+    }
+    ctx.restore();
   }
   resize();
   function toScreen(x, z) { const r = cv.getBoundingClientRect(); return [r.left + sx(x), r.top + sy(z)]; }
