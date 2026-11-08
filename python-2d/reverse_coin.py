@@ -66,7 +66,7 @@ SPIN_ON = True                          # 旋轉物理開關（開場畫面可�
 WATERMARK = "測試版推廣版本 請勿銷售利用｜遊戲版權歸 BANDAI 萬代所有"
 PULL_MAX = 160.0                        # 後拉發射：在畫面上拉 160 px＝100% 力量；從任何位置按下都能拉滿
 PULL_MIN = 0.04                         # 拉不到 4% 視為取消
-TURN_TIME = 18.0                        # 每回合出手限時（秒），超過＝放棄這回合
+TURN_TIME = 30.0                        # 每回合出手限時（秒），超過＝放棄這回合
 MATCH_TIME = 480.0                      # 全場 8 分鐘：時間到比開場隊伍 M 值合計，少的一方獲勝
 SPIN_PERF = 0.2                         # 每加 1 段旋轉，PERFECT 區縮小 20%（3 段剩 40%）
 VMIN, VMAX = 290.0 * LEN_S, 1386.0 * LEN_S           # 力量整體＋10%、低力量也推得動（原 160～1260）              # 力量 0%～100% 的初速
@@ -854,6 +854,7 @@ class Game:
         mb = SHOOTER_MASS if b is self.shooter else 1.0
         jn = rel * (1 + COIN_REST) / (1 / ma + 1 / mb)   # 法向衝量（攻擊金幣較重）
         self.sfx.play("coin_hit", rel / 700)
+        self.fx_hit((a.pos + b.pos) / 2, rel, "coin")
         a.vel -= n * (jn / ma)
         b.vel += n * (jn / mb)
         # 接觸點切向相對速度＝平移差＋兩枚旋轉（ω×R）；摩擦衝量受 COIN_MU·法向衝量限制
@@ -896,6 +897,7 @@ class Game:
             self.sfx.play("rail_hit", vn / 500)
             gs = getattr(self, "god_shot", None)
             if vn >= OUT_SPEED and not NO_OUT and not (gs and p.team == gs[1]):            # 神之一擊：自己不出界
+                self.fx_hit(Vector2(p.pos), vn * 1.2, "coin")                        # 飛出界：大震動
                 p.out = True
                 p.vel *= 0.55          # 飛越邊框損失速度
                 return
@@ -904,6 +906,7 @@ class Game:
             if vn >= UNLOCK_RAIL and self.spot_facing(p, outward) and vn > p.spot_speed:
                 p.spot_speed, p.spot_src = vn, "rail"
             p.pos[axis] = lo if pos < lo else hi
+            self.fx_hit(p.pos + outward * R, vn, "rail")
             p.vel[axis] = -p.vel[axis] * RAIL_REST
             # 邊框摩擦：接觸點切向速度（含旋轉）→ 改變反彈角度與旋轉（塞球）
             t = Vector2(-outward.y, outward.x)
@@ -913,6 +916,63 @@ class Game:
             p.vel += t * jt
             p.spin += 2 * jt / R if SPIN_ON else 0.0
             p.rail_hits += 1
+
+    # ---- 撞擊感：火花＋衝擊波圈、畫面震動、重擊頓格（力道越大越明顯）
+    def fx_hit(self, pos, rel, kind):
+        if self.scene != "battle":
+            return
+        k = min(1.6, rel / (OUT_SPEED * 0.98))
+        if k < 0.12:
+            return
+        big = k if kind == "coin" else k * 0.6
+        self.fx_shake = min(1.4, max(getattr(self, "fx_shake", 0.0), big))
+        if kind == "coin" and k > 0.5:
+            self.fx_stop = max(getattr(self, "fx_stop", 0.0), min(0.09, 0.035 + 0.05 * (k - 0.5)))
+        sp = getattr(self, "fx_sparks", [])
+        if len(sp) >= 12:
+            sp.pop(0)
+        px = 10 * MM                                            # 1 cm 幾 px
+        dirs = []
+        for _ in range(14 if kind == "coin" else 8):
+            a, v = random.random() * math.tau, (5 + random.random() * 9) * (0.5 + k) * px
+            dirs.append((math.cos(a) * v, math.sin(a) * v))
+        sp.append({"pos": Vector2(pos), "t": 0.0, "life": 0.32 + 0.28 * min(1, k), "k": k, "kind": kind, "dirs": dirs})
+        self.fx_sparks = sp
+
+    def fx_tick(self, dt):
+        self.fx_shake = max(0.0, getattr(self, "fx_shake", 0.0) - dt * 4.5)
+        sp = getattr(self, "fx_sparks", [])
+        for f in sp:
+            f["t"] += dt
+        self.fx_sparks = [f for f in sp if f["t"] < f["life"]]
+
+    def draw_fx(self):
+        s = self.screen
+        sparks = getattr(self, "fx_sparks", [])
+        layer = pygame.Surface(s.get_size(), pygame.SRCALPHA) if sparks else None    # 一格只建一張透明圖層
+        for f in sparks:
+            u, k, x, y = f["t"] / f["life"], f["k"], f["pos"].x, f["pos"].y
+            hot = f["kind"] == "coin" and k > 0.9
+            col = (255, 194, 58) if f["kind"] == "rail" else (255, 61, 31) if hot else (255, 160, 42)
+            if u < 0.3 and f["kind"] == "coin":                 # 撞擊瞬間的白色閃光
+                rr = int(R * (1 + k))
+                pygame.draw.circle(layer, (255, 245, 210, int(200 * (1 - u / 0.3) * min(1, 0.4 + k))), (int(x), int(y)), rr)
+            rad = int(R * (0.9 + u * (1.4 + 1.8 * k)))
+            lw = max(2, int((0.45 + 0.45 * k) * R * 0.35 * (1 - u)))
+            al = int(255 * (1 - u) * min(1, 0.55 + k * 0.5))
+            pygame.draw.circle(layer, (40, 20, 0, al // 2), (int(x), int(y)), rad, lw + 2)
+            pygame.draw.circle(layer, col + (al,), (int(x), int(y)), rad, lw)
+            t1, t0 = f["t"], max(0.0, f["t"] - 0.05)
+            for dx, dy in f["dirs"]:                            # 火花：往外飛的短線
+                pygame.draw.line(layer, col + (int(255 * (1 - u)),), (x + dx * t0, y + dy * t0), (x + dx * t1, y + dy * t1), max(2, int(R * 0.12)))
+        if layer:
+            s.blit(layer, (0, 0))
+        sh = getattr(self, "fx_shake", 0.0)
+        if sh > 0.01:                                           # 撞擊震動：場地區域小幅抖動
+            area = FIELD.inflate(2 * RAIL + 40, 2 * RAIL + 40).clip(s.get_rect())
+            snap = s.subsurface(area).copy()
+            s.fill(COL["bg"] if "bg" in COL else (20, 18, 28), area)
+            s.blit(snap, (area.x + int((random.random() - 0.5) * sh * 14), area.y + int((random.random() - 0.5) * sh * 14)))
 
     def all_stopped(self):
         return all(p.vel.length() < 3 * LEN_S and abs(p.spin) < 0.4 for p in self.pieces if p.alive)
@@ -1436,6 +1496,7 @@ class Game:
             self.confirm_aim()
 
     def update(self, dt):
+        self.fx_tick(dt)
         if self.aim_hold:                                     # ⟲⟳ 按住越久轉越快
             if not (self.aim_active() and pygame.mouse.get_pressed()[0]):
                 self.aim_hold = None
@@ -1472,8 +1533,11 @@ class Game:
         elif ph == "moving":
             vmax = max((p.vel.length() for p in self.pieces if p.alive), default=0)
             n = max(4, min(40, math.ceil(vmax * dt / (R * 0.25))))   # 高速時細分，避免穿透
-            for _ in range(n):
-                self.physics(dt / n)
+            if getattr(self, "fx_stop", 0.0) > 0:            # 重擊頓格：這一格物理暫停
+                self.fx_stop -= dt
+            else:
+                for _ in range(n):
+                    self.physics(dt / n)
             if self.all_stopped():
                 self.start_resolve()
         elif ph == "jump":
@@ -1766,7 +1830,7 @@ class Game:
                      COL["amber"], "center")
         if self.phase == "duel":
             self.draw_duel()
-        # 倒數：每回合 18 秒（圓）＋全場剩餘
+        # 倒數：每回合 30 秒（圓）＋全場剩餘
         if self.phase in ("select", "aim", "power", "accuracy", "place", "orient"):
             t = math.ceil(self.turn_t)
             c = (FIELD.left - 44, FIELD.top + 40)
@@ -1792,6 +1856,7 @@ class Game:
             if tr:
                 text(s, f"全場時間到｜開場 M 值合計 {tr[0]:,} vs {tr[1]:,}", (box.centerx, 432), 20, COL["text"], "center")
                 text(s, "相同 → 平手" if tr[0] == tr[1] else "合計較少的一方獲勝", (box.centerx, 460), 18, COL["dim"], "center")
+        self.draw_fx()
         self.draw_panel()
 
     def draw_duel(self):
