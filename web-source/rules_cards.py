@@ -8,7 +8,7 @@ def coin(x, y, r=17, camp='O', label='', tab=0, spot=False, ring=None):
     if spot:
         import math
         for base in (tab, tab + 180):
-            a0, a1 = math.radians(base - 14.112), math.radians(base + 14.112)
+            a0, a1 = math.radians(base - 14.8176), math.radians(base + 14.8176)
             rr = r + 6
             x0, y0, x1, y1 = x + rr * math.cos(a0), y + rr * math.sin(a0), x + rr * math.cos(a1), y + rr * math.sin(a1)
             out.append(f'<path d="M{x0:.1f} {y0:.1f} A{rr} {rr} 0 0 1 {x1:.1f} {y1:.1f}" stroke="{RD}" stroke-width="6" fill="none" stroke-linecap="round"/>')
@@ -88,7 +88,7 @@ card('⑤ 旋轉（可在開場關閉）',
 # 6 弱點
 card('⑥ リバースポット（弱點）',
      coin(120, 75, 30, 'O', '', 0, spot=True) + arrow(208, 75, 160, 75, CY, 4) + text(200, 60, '打這裡', CY, 12)
-     + text(40, 42, '開關側', RD, 12) + text(40, 112, '和正對面', RD, 12) + text(40, 128, '各 ±14°', DIM, 11),
+     + text(40, 42, '開關側', RD, 12) + text(40, 112, '和正對面', RD, 12) + text(40, 128, '各 ±15°', DIM, 11),
      '開關（小突起）那一側和正對面是弱點。用力打中 → 金幣彈起翻面；打其他地方再大力也不會翻。')
 # 7 翻面判定
 card('⑦ 彈起後：顏色決定',
