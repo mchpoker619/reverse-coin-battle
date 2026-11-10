@@ -38,7 +38,7 @@ const GFX = (() => {
 
   function clack() {}
   function buildPieces() { for (const p of G.pieces) { p.mesh = true; p.label = {hidden: true}; } }
-  function refreshTextures() {}
+  function refreshTextures() { genFieldCv = null; }
   function followTurn() {}
   function setMode() {}
 
@@ -124,7 +124,7 @@ const GFX = (() => {
     ctx.fillStyle = "#6b4a2e"; ctx.fillRect(fx0 - rt, fy0 - rt, fw + 2 * rt, fh + 2 * rt);
     ctx.fillStyle = "#2e2840"; ctx.fillRect(fx0 - rt * 0.35, fy0 - rt * 0.35, fw + rt * 0.7, fh + rt * 0.7);
     // 場地
-    const fieldImg = ASSET.fieldImg || genFieldCv || (genFieldCv = genField());
+    const fieldImg = genFieldCv || (genFieldCv = fieldCanvas());
     ctx.drawImage(fieldImg, fx0, fy0, fw, fh);
 
     const ph = G.phase, battle = G.scene === "battle";
