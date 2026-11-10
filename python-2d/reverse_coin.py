@@ -289,16 +289,117 @@ def sprite(cid, face):
 
 
 _FIELD_ART = []
+HERE = os.path.dirname(os.path.abspath(__file__))
+# 場地＝底圖（官方バリ場，或玩家自己的圖片 my_field.png）＋放置區域圖層（獨立一層，畫在底圖上面）
+# 只影響這台電腦的畫面，不影響物理與擺放判定
+FIELD_CFG = os.path.join(HERE, "field_settings.json")
+FIELD_BG, PLACE_GUIDE = "default", True
+try:
+    import json as _json
+    _c = _json.load(open(FIELD_CFG, encoding="utf-8"))
+    FIELD_BG, PLACE_GUIDE = ("custom" if _c.get("bg") == "custom" else "default"), bool(_c.get("guide", True))
+except Exception:
+    pass
+
+
+def save_field_cfg():
+    try:
+        import json as _json
+        _json.dump({"bg": FIELD_BG, "guide": PLACE_GUIDE}, open(FIELD_CFG, "w", encoding="utf-8"))
+    except OSError:
+        pass
+
+
+def custom_field_path():
+    for n in ("my_field.png", "my_field.jpg", "my_field.jpeg"):
+        f = os.path.join(HERE, n)
+        if os.path.exists(f):
+            return f
+    return None
+
+
+def cover(img, size):
+    """等比例放大填滿 size、置中裁切（橫的圖自動轉 90°）。"""
+    if img.get_width() > img.get_height() * 1.05:
+        img = pygame.transform.rotate(img, -90)
+    sc = max(size[0] / img.get_width(), size[1] / img.get_height())
+    img = pygame.transform.smoothscale(img, (max(1, round(img.get_width() * sc)), max(1, round(img.get_height() * sc))))
+    out = pygame.Surface(size)
+    out.blit(img, ((size[0] - img.get_width()) // 2, (size[1] - img.get_height()) // 2))
+    return out
+
+
+def draw_place_layer(surf, rect):
+    """放置區域圖層：6 個起始位置、反轉機關方向、自己間隔 1 枚、與對手間隔 6 枚。"""
+    r, rc = round(22.5 * MM), COIN_MM * MM / 2
+    lay = pygame.Surface(rect.size, pygame.SRCALPHA)
+    def seg(a, b, col, w):
+        pygame.draw.line(lay, (0, 0, 0, 150), a, b, w + 3)
+        pygame.draw.line(lay, col, a, b, w)
+    for side in ("top", "bottom"):
+        y = START_Y[side] * rect.h
+        col = (244, 242, 234) if side == "top" else (215, 166, 255)
+        for k in range(3):
+            x = START_X[k] * rect.w
+            pygame.draw.circle(lay, col + (40,), (x, y), r)
+            for i in range(24):                               # 虛線圓
+                if i % 2 == 0:
+                    a0, a1 = i / 24 * 2 * math.pi, (i + 1) / 24 * 2 * math.pi
+                    seg((x + r * math.cos(a0), y + r * math.sin(a0)), (x + r * math.cos(a1), y + r * math.sin(a1)), col, 2)
+            nx = x - r if side == "top" else x + r
+            pygame.draw.rect(lay, col, (nx - 3, y - 6, 6, 12), 2)
+        for k in range(2):
+            x1, x2 = START_X[k] * rect.w + rc, START_X[k + 1] * rect.w - rc
+            yy = y + (-1 if side == "top" else 1) * (r + 9)
+            seg((x1, yy), (x2, yy), col, 1); seg((x1, yy - 4), (x1, yy + 4), col, 1); seg((x2, yy - 4), (x2, yy + 4), col, 1)
+            t = font(12, True).render("間隔 1 枚", True, col)
+            ty = yy + (-11 if side == "top" else 11)
+            bg = pygame.Rect(0, 0, t.get_width() + 8, t.get_height() + 2); bg.center = ((x1 + x2) / 2, ty)
+            pygame.draw.rect(lay, (10, 8, 16, 185), bg, border_radius=4); lay.blit(t, t.get_rect(center=bg.center))
+    xg, y1, y2 = START_X[2] * rect.w + r + 18, START_Y["top"] * rect.h + rc, START_Y["bottom"] * rect.h - rc
+    yc = (228, 255, 58)
+    seg((xg, y1), (xg, y2), yc, 2)
+    for i in range(7):
+        yy = y1 + (y2 - y1) * i / 6
+        seg((xg - (5 if i in (0, 6) else 3), yy), (xg + (5 if i in (0, 6) else 3), yy), yc, 1)
+    t = pygame.transform.rotate(font(12, True).render("與對手間隔 6 枚", True, yc), -90)
+    bg = pygame.Rect(0, 0, t.get_width() + 2, t.get_height() + 8); bg.center = (xg + 13, (y1 + y2) / 2)
+    pygame.draw.rect(lay, (10, 8, 16, 185), bg, border_radius=4); lay.blit(t, t.get_rect(center=bg.center))
+    surf.blit(lay, rect.topleft)
 
 
 def field_art():
     if not _FIELD_ART:
-        try:
-            img = pygame.image.load(os.path.join(os.path.dirname(os.path.abspath(__file__)), "field.jpg")).convert()
-            _FIELD_ART.append(pygame.transform.smoothscale(img, FIELD.size))
-        except (FileNotFoundError, pygame.error):
-            _FIELD_ART.append(None)
+        img = None
+        f = custom_field_path() if FIELD_BG == "custom" else None
+        for src in ([f] if f else []) + [os.path.join(HERE, "field.jpg")]:
+            try:
+                img = cover(pygame.image.load(src).convert(), FIELD.size)
+                break
+            except (FileNotFoundError, pygame.error):
+                continue
+        _FIELD_ART.append(img)
     return _FIELD_ART[0]
+
+
+def pick_field_image():
+    """選自己的圖片當場地底圖：有 tkinter 就開檔案視窗；沒有就讀遊戲資料夾裡的 my_field.png／jpg。"""
+    path = None
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk(); root.withdraw()
+        path = filedialog.askopenfilename(title="選擇場地底圖", filetypes=[("圖片", "*.png *.jpg *.jpeg *.bmp *.webp")])
+        root.destroy()
+    except Exception:
+        path = None
+    if path:
+        try:
+            img = pygame.image.load(path).convert()
+            pygame.image.save(cover(img, (594 * 2, 840 * 2)), os.path.join(HERE, "my_field.png"))
+        except (pygame.error, OSError):
+            return False
+    return custom_field_path() is not None
 
 
 # ---------------------------------------------------------------- 物件
@@ -414,6 +515,9 @@ class Game:
                 Button((cx - 160, 492, 155, 56), "音效：開" if self.sfx.on else "音效：關", self.title_sound, size=20),
                 Button((cx + 5, 492, 155, 56), "音樂：開" if self.sfx.music_on else "音樂：關", self.title_music, size=20),
                 Button((cx - 160, 558, 320, 56), "規則說明", self.goto_rules, size=22),
+                Button((cx - 160, 622, 155, 50), "底圖：自己的圖" if FIELD_BG == "custom" else "底圖：預設", self.cycle_field_bg, size=18,
+                       color=(40, 80, 60) if FIELD_BG == "custom" else None),
+                Button((cx + 5, 622, 155, 50), "放置圖層：開" if PLACE_GUIDE else "放置圖層：關", self.toggle_guide, size=18),
                 back]
         else:
             self.buttons = [
@@ -451,6 +555,22 @@ class Game:
         RULE_MODE = order[(order.index(RULE_MODE) + 1) % 3]
         EASY_MODE = RULE_MODE == "easy"
         self.goto_title()
+
+    def cycle_field_bg(self):
+        """底圖：預設 → 選自己的圖片；自己的圖 → 回預設。"""
+        global FIELD_BG
+        if FIELD_BG == "custom":
+            FIELD_BG = "default"
+        elif pick_field_image():
+            FIELD_BG = "custom"
+        else:
+            self.field_note = "找不到圖片：請把圖片命名 my_field.png（或 .jpg）放進遊戲資料夾"
+        _FIELD_ART.clear(); save_field_cfg(); self.goto_title()
+
+    def toggle_guide(self):
+        global PLACE_GUIDE
+        PLACE_GUIDE = not PLACE_GUIDE
+        save_field_cfg(); self.goto_title()
 
     def toggle_out(self):
         global NO_OUT
@@ -1588,6 +1708,9 @@ class Game:
         text(s, "Reverse Coin Battle｜逆転バリバリバース 2D 對戰", (SW // 2, 240), 26, COL["dim"], "center")
         text(s, "官方說明書 Ver.1.1.2 エキスパートルール・全 101 枚金幣", (SW // 2, 284), 22, COL["dim"], "center")
         text(s, WATERMARK, (SW // 2, 322), 22, (255, 107, 125), "center", True)
+        if getattr(self, "title_page", "main") == "set":
+            text(s, getattr(self, "field_note", "") or ("場地底圖：你自己的圖片（只在這台電腦，連線對手看不到）" if FIELD_BG == "custom"
+                 else "場地底圖可換成自己的圖片；放置區域圖層（金幣位置與間隔）會疊在上面"), (SW // 2, 744), 16, COL["dim"], "center")
         if getattr(self, "title_page", "main") == "play":
             text(s, ("場地：A2 420×594 mm／A3 297×420 mm（官方圖紙原尺寸），開局前選定，對戰中不能更改" if FIELD_A2_ENABLED
                      else "場地：A3 297×420 mm（官方バリ場原尺寸）"), (SW // 2, 642), 16, COL["dim"], "center")
@@ -1787,6 +1910,8 @@ class Game:
             s.blit(img, FIELD)
         else:
             pygame.draw.rect(s, COL["field"], FIELD)
+        if PLACE_GUIDE:
+            draw_place_layer(s, FIELD)
         for cx, cy in ((outer.left + 9, outer.top + 9), (outer.right - 9, outer.top + 9),
                        (outer.left + 9, outer.bottom - 9), (outer.right - 9, outer.bottom - 9)):
             pygame.draw.circle(s, (150, 120, 80), (cx, cy), 4)
