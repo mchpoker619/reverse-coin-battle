@@ -16,13 +16,13 @@ src_site_peer = PEERJS
 assert 'THREE.' not in src[src.index('const GFX'):src.index('const GFX') + len(gfx)]
 rep = [('<title>逆轉金幣 3D</title>', '<title>逆轉金幣 2D</title>'),
        ('REVERSE COIN BATTLE 3D', 'REVERSE COIN BATTLE 2D'),
-       ('逆転バリバリバース 立體對戰', '逆転バリバリバース 2D 俯視對戰')]
+       ('立體對戰｜專家規則', '2D 俯視對戰｜專家規則')]
 for a, b in rep:
     assert a in src, a
     src = src.replace(a, b)
 src = src.replace('#camBar.folded > button:not(#camFold) { display: none; }',
                   '#camBar.folded > button:not(#camFold) { display: none; }\n#camTop, #camTilt, #camRotL, #camRotR { display: none !important; }')
-# 內嵌官方圖片與音效
+# 內嵌原創圖片與音效
 def data_uri(img, fmt, mime, **kw):
     buf = io.BytesIO(); img.save(buf, fmt, **kw)
     return f'data:{mime};base64,' + base64.b64encode(buf.getvalue()).decode()

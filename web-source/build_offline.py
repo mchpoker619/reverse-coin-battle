@@ -1,4 +1,4 @@
-"""產生單機版：一個 HTML 檔，內含 three.js、官方金幣圖（202 張）與官方バリ場，完全不需網路。"""
+"""產生單機版：一個 HTML 檔，內含 three.js、原創金幣圖（202 張）與原創場地圖，完全不需網路。"""
 import base64
 import io
 import json
@@ -55,7 +55,7 @@ assert MQTT_TAG in src
 MQTTJS = open(os.path.join(HERE, 'mqtt.min.js'), encoding='utf-8').read().replace('</script>', '<\\/script>')
 src = src.replace(MQTT_TAG, '<script>' + MQTTJS + '</script>')
 src = src.replace(cdn, '<script>' + three + '</script>\n<script>' + assets_js + '</script>\n<script>@@SOUND@@</script>')
-# 網頁版（claude.ai 發布用：內建官方圖片＋音效，不含 <html>/<head> 外框，左右留 16px）
+# 網頁版（claude.ai 發布用：內建原創圖片＋音效，不含 <html>/<head> 外框，左右留 16px）
 web = src.replace('@@SOUND@@', sound_embed_js)
 web = web.replace("padding-left: max(8px, env(safe-area-inset-left, 0px));", "padding-left: max(16px, env(safe-area-inset-left, 0px));")
 web = web.replace("padding-right: max(8px, env(safe-area-inset-right, 0px));", "padding-right: max(16px, env(safe-area-inset-right, 0px));")
