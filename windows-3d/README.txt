@@ -23,7 +23,7 @@
   遊戲中右上「音效」「音樂」按鈕分開開關（N＝音效、M＝音樂）。
 
 【檔案】
-  game\ReverseCoin3D.html   遊戲本體（已內建 three.js、101 枚金幣圖、官方バリ場）
+  game\ReverseCoin3D.html   遊戲本體（已內建 three.js、101 枚金幣圖、官方場地）
   game\icon.ico             捷徑圖示
   game\install.ps1／uninstall.ps1  安裝／移除程式
 
