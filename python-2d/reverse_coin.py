@@ -1,6 +1,6 @@
 """逆轉金幣 桌面對戰（pygame 2D 俯視）
 
-規則：官方取扱説明書 Ver.1.1.2 エキスパートルール（デッキ 3 枚・OX 合計 ≤ 15,000，メタ幣以 M 值計）
+規則：專家規則（隊伍 3 枚・OX 合計 ≤ 15,000，雙值幣以 M 值計）
 擊球：選硬幣 → 確定 → 方向 → 力量條 → 精準度條
 
 執行：python -m pip install pygame-ce   然後   python reverse_coin.py
@@ -63,16 +63,16 @@ RAIL_MU = 0.25                          # 邊框摩擦：帶旋轉撞牆改變�
 CURL_K = 0.0495                         # 旋轉中滑行的側向弧線（冰壺效果）
 ACC_SPIN = 6.0                          # 精準度沒按準時額外帶出的旋轉
 SPIN_ON = True                          # 旋轉物理開關（開場畫面可切換）
-WATERMARK = "測試版推廣版本 請勿銷售利用｜遊戲版權歸 BANDAI 萬代所有"
+WATERMARK = "測試版推廣版本 請勿銷售利用｜改編萬代逆轉金幣"
 PULL_MAX = 160.0                        # 後拉發射：在畫面上拉 160 px＝100% 力量；從任何位置按下都能拉滿
 PULL_MIN = 0.04                         # 拉不到 4% 視為取消
 TURN_TIME = 30.0                        # 每回合出手限時（秒），超過＝放棄這回合
 MATCH_TIME = 480.0                      # 全場 8 分鐘：時間到比開場隊伍 M 值合計，少的一方獲勝
 SPIN_PERF = 0.2                         # 每加 1 段旋轉，PERFECT 區縮小 20%（3 段剩 40%）
 VMIN, VMAX = 290.0 * LEN_S, 1386.0 * LEN_S           # 力量整體＋10%、低力量也推得動（原 160～1260）              # 力量 0%～100% 的初速
-SPOT_HALF = math.radians(14.8176)  # 弱點 ±14.8°（14.112° 再加大 5%）           # リバースポット半角（開關側與對側各一）
+SPOT_HALF = math.radians(14.8176)  # 弱點 ±14.8°（14.112° 再加大 5%）           # 弱點半角（開關側與對側各一）
 UNLOCK_RAIL = 322.0 * LEN_S                     # 弱點撞「邊框」的翻轉門檻（維持不變）
-UNLOCK_SPEED = 296.24 * LEN_S                    # 翻轉力道：リバースポット受到的撞擊速度 ≥ 此值才會彈起（金幣互撞、撞邊框皆同）
+UNLOCK_SPEED = 296.24 * LEN_S                    # 翻轉力道：弱點受到的撞擊速度 ≥ 此值才會彈起（金幣互撞、撞邊框皆同）
 ACC_MAX_ERR = math.radians(70)          # 精準度條最邊緣：以發射方向為基準左右各偏 70°
 ACC_CURVE = 400.0 * LEN_S                       # 精準度偏差造成的側向弧線加速度
 MISS_MIN = 5 / 70                       # 沒按進 PERFECT 區至少偏 5°
@@ -83,7 +83,7 @@ FIELD_A2_ENABLED = False                # 目前只開放 A3；A2 程式保留�
 
 
 def set_field(size):
-    """A2＝420×594 mm（官方 A3 等比例放大 √2）；A3＝297×420 mm（官方バリ場原尺寸）。
+    """A2＝420×594 mm（官方 A3 等比例放大 √2）；A3＝297×420 mm（標準場地尺寸）。
     場地在畫面上一樣大：換算 mm→px 比例，金幣與所有速度／加速度等比例換算，擺放距離（mm）不變。"""
     global FIELD_SIZE, FIELD_W_MM, FIELD_H_MM, MM, LEN_S, R, START_X, START_Y
     global OUT_SPEED, FRICTION, VMIN, VMAX, UNLOCK_RAIL, UNLOCK_SPEED, ACC_CURVE
@@ -290,7 +290,7 @@ def sprite(cid, face):
 
 _FIELD_ART = []
 HERE = os.path.dirname(os.path.abspath(__file__))
-# 場地＝底圖（官方バリ場，或玩家自己的圖片 my_field.png）＋放置區域圖層（獨立一層，畫在底圖上面）
+# 場地＝底圖（原創示意場地，或玩家自己的圖片 my_field.png）＋放置區域圖層（獨立一層，畫在底圖上面）
 # 只影響這台電腦的畫面，不影響物理與擺放判定
 FIELD_CFG = os.path.join(HERE, "field_settings.json")
 FIELD_BG, PLACE_GUIDE = "default", True
@@ -529,7 +529,7 @@ class Game:
             b.alpha = 215
 
     def title_bg(self):
-        """主選單底圖：官方バリ場（裁成畫面大小）＋深色漸層。"""
+        """主選單底圖：場地圖（裁成畫面大小）＋深色漸層。"""
         if getattr(self, "_title_bg", None) is None:
             bg = pygame.Surface((SW, SH))
             bg.fill(COL["bg"])
@@ -629,7 +629,7 @@ class Game:
 
     def start_match(self, vs_cpu):
         self.players = [Player("玩家 1"), Player(f"電腦（{CPU_NAME[CPU_LEVEL]}）" if vs_cpu else "玩家 2", cpu=vs_cpu)]
-        self.goto_build(0)                      # 官方：先決定デッキ，再決定サイドと先攻後攻
+        self.goto_build(0)                      # 官方：先決定隊伍，再決定陣營與先後攻
 
     def goto_rps(self):
         self.scene = "rps"
@@ -661,7 +661,7 @@ class Game:
     def goto_build(self, idx):
         p = self.players[idx]
         if p.cpu:
-            p.team_ids = list(PRESETS[0][1])[:team_max()]    # 電腦還不知道陣營 → 帶非メタ的平衡隊
+            p.team_ids = list(PRESETS[0][1])[:team_max()]    # 電腦還不知道陣營 → 帶非雙值的平衡隊
             if idx == 0:
                 return self.goto_build(1)
             return self.goto_rps()
@@ -702,7 +702,7 @@ class Game:
             b.append(Button((px, y, 410, 38), "套用：" + name, lambda ids=ids: self.apply_preset(ids), size=17))
             y += 44
         b.append(Button((px, 630, 196, 50), "清除", lambda: self.sel.clear(), size=20))
-        b.append(Button((px + 214, 630, 196, 50), "確定デッキ", self.confirm_build, self.build_ok, size=20,
+        b.append(Button((px + 214, 630, 196, 50), "確定隊伍", self.confirm_build, self.build_ok, size=20,
                         color=(80, 60, 160)))
         b.append(Button((px, 700, 410, 44), "返回標題", self.goto_title, size=18))
         self.buttons = b
@@ -767,7 +767,7 @@ class Game:
         lst = [c for c in COINS
                if (self.flt_side == "全部" or c.main == {"白主": "O", "黑主": "X"}[self.flt_side])
                and (self.flt_rar == "全部" or c.rarity == self.flt_rar)
-               and lo <= c.cost <= hi                                   # 分數＝組隊計分（メタ幣為 M 值）
+               and lo <= c.cost <= hi                                   # 分數＝組隊計分（雙值幣為 M 值）
                and (not getattr(self, "fit_only", False) or c.id in self.sel or c.cost <= left)
                and (not q or any(q in str(t).lower() for t in (c.jp, c.zh, c.set, c.rarity, c.id, c.o, c.x)))]
         top = lambda c: max(c.o, c.x)
@@ -997,7 +997,7 @@ class Game:
             self.shooter_hit = True
 
     def spot_facing(self, p, direction):
-        """direction（從金幣中心指向受力點）是否落在リバースポット（開關側或正對側）。"""
+        """direction（從金幣中心指向受力點）是否落在弱點（開關側或正對側）。"""
         d = abs(angle_diff(math.atan2(direction.y, direction.x), p.angle))
         return min(d, math.pi - d) <= SPOT_HALF
 
@@ -1010,7 +1010,7 @@ class Game:
         """撞球檯式邊框，三種情形：
         1) 垂直撞擊速度 ≥ OUT_SPEED → 飛越邊框出界
         2) 否則依 RAIL_REST 減少動能後反彈
-        3) 反彈時若是自己的リバースポット撞到邊框、且速度 ≥ UNLOCK_SPEED → 也會彈起翻轉"""
+        3) 反彈時若是自己的弱點撞到邊框、且速度 ≥ UNLOCK_SPEED → 也會彈起翻轉"""
         for axis, lo, hi in ((0, FIELD.left + R, FIELD.right - R), (1, FIELD.top + R, FIELD.bottom - R)):
             pos = p.pos[axis]
             if lo <= pos <= hi:
@@ -1115,7 +1115,7 @@ class Game:
             if target:
                 target.spot_speed, target.spot_src, target.touched = max(target.spot_speed, UNLOCK_SPEED * 1.3), "coin", True
                 self.shooter_hit = True
-                self.add_log(f"⚡ 硬幣之神・神之一擊！命中 {target.coin.jp} 的リバースポット")
+                self.add_log(f"⚡ 硬幣之神・神之一擊！命中 {target.coin.jp} 的弱點")
         for p in self.pieces:
             p.vel = Vector2()
             p.spin = 0
@@ -1123,7 +1123,7 @@ class Game:
                 p.unlocked = True
                 p.flipped = random.random() < FLIP_CHANCE      # 彈起後落地：正反面各 1/2
                 how = "撞到邊框" if p.spot_src == "rail" else "被撞到"
-                self.add_log(f"{p.coin.jp} 的リバースポット{how}（力道 {int(p.spot_speed)}）→ 彈起")
+                self.add_log(f"{p.coin.jp} 的弱點{how}（力道 {int(p.spot_speed)}）→ 彈起")
         if any(p.unlocked for p in self.pieces):
             self.phase = "jump"
             self.sfx.play("flip", 1.0)
@@ -1142,7 +1142,7 @@ class Game:
         if not self.shooter_hit and not S.out:
             self.add_log("沒碰到任何金幣 → 無效攻擊，原地重新鎖定")
         elif self.shooter_hit and not any(p.unlocked or p.out for p in self.pieces if p.alive):
-            self.add_log("有碰撞但沒打中リバースポット → 沒有翻轉，比賽繼續")
+            self.add_log("有碰撞但沒打中弱點 → 沒有翻轉，比賽繼續")
         # 香港規則 p.9：攻擊方自己和對手同時解除狀態 → 都變色＝雙方 Safe；只有一方變色＝那一方 OUT；都沒變色＝雙方 Safe
         defs = [p for p in self.pieces if p.alive and p.team != A and p.unlocked]
         if OFFICIAL_RULES and S.alive and S.unlocked and not S.out and defs:
@@ -1169,7 +1169,7 @@ class Game:
             if not p.alive or getattr(p, "done", False):
                 continue
             if p.team == A:
-                # 攻擊方（官方 p.8～9）：自己回合自己的金幣出界＝自滅 OUT；自爆翻成對方顏色＝OUT；自爆仍是自己顏色＝セーフ放回原位
+                # 攻擊方（官方 p.8～9）：自己回合自己的金幣出界＝自滅 OUT；自爆翻成對方顏色＝OUT；自爆仍是自己顏色＝安全放回原位
                 if p is S and p.out:
                     self.eliminate(p, "攻擊方出界 → 淘汰（自滅）")
                 elif p.out:
@@ -1181,7 +1181,7 @@ class Game:
                 elif p.unlocked and p.flipped and OFFICIAL_RULES:
                     self.eliminate(p, "自爆翻成對方顏色 → 淘汰")
                 elif p.unlocked:
-                    side = "翻成對方顏色 → 不淘汰（isn_ver.1）" if p.flipped else "仍是自己顏色 → セーフ"
+                    side = "翻成對方顏色 → 不淘汰（isn_ver.1）" if p.flipped else "仍是自己顏色 → 安全"
                     self.add_log(f"{p.coin.jp}（攻擊方）自爆{side}，放回撞擊前的位置")
                     p.return_prev = True
             else:
@@ -1200,7 +1200,7 @@ class Game:
                         p.return_prev = True
                 else:
                     v = p.ox_after_pop
-                    meta = f"（メタ幣核心翻面：{p.value}→{v}）" if p.coin.meta else ""
+                    meta = f"（雙值幣核心翻面：{p.value}→{v}）" if p.coin.meta else ""
                     if v >= S.value:
                         self.add_log(f"存活｜{p.coin.jp} 仍是自己顏色，OX {v} ≥ {S.value} → 存活{meta}")
                         self.events.append(("duel", S, p, True))
@@ -1705,15 +1705,15 @@ class Game:
         pygame.draw.rect(panel, (228, 255, 58, 90), panel.get_rect(), 2, border_radius=18)
         s.blit(panel, (SW // 2 - 320, 84))
         text(s, "逆轉金幣", (SW // 2, 150), 96, COL["yel"], "center", True)
-        text(s, "Reverse Coin Battle｜逆転バリバリバース 2D 對戰", (SW // 2, 240), 26, COL["dim"], "center")
-        text(s, "官方說明書 Ver.1.1.2 エキスパートルール・全 101 枚金幣", (SW // 2, 284), 22, COL["dim"], "center")
+        text(s, "Reverse Coin Battle｜逆轉金幣 2D 對戰", (SW // 2, 240), 26, COL["dim"], "center")
+        text(s, "專家規則・全 101 枚金幣", (SW // 2, 284), 22, COL["dim"], "center")
         text(s, WATERMARK, (SW // 2, 322), 22, (255, 107, 125), "center", True)
         if getattr(self, "title_page", "main") == "set":
             text(s, getattr(self, "field_note", "") or ("場地底圖：你自己的圖片（只在這台電腦，連線對手看不到）" if FIELD_BG == "custom"
                  else "場地底圖可換成自己的圖片；放置區域圖層（金幣位置與間隔）會疊在上面"), (SW // 2, 744), 16, COL["dim"], "center")
         if getattr(self, "title_page", "main") == "play":
             text(s, ("場地：A2 420×594 mm／A3 297×420 mm（官方圖紙原尺寸），開局前選定，對戰中不能更改" if FIELD_A2_ENABLED
-                     else "場地：A3 297×420 mm（官方バリ場原尺寸）"), (SW // 2, 642), 16, COL["dim"], "center")
+                     else "場地：A3 297×420 mm（標準場地尺寸）"), (SW // 2, 642), 16, COL["dim"], "center")
         self.draw_coin_at(Vector2(SW // 2 - 380, 150), "O", BY_ID["v1o-bbr"], 1.4, 0)
         self.draw_coin_at(Vector2(SW // 2 + 380, 150), "X", BY_ID["v1x-bbr"], 1.4, math.pi)
 
@@ -1733,19 +1733,19 @@ class Game:
             return
         text(s, "規則說明（官方說明書 Ver.1.1.2＋香港大賽規則）", (60, 40), 40, COL["yel"], bold=True)
         lines = [
-            "【賽前】先組隊：一定要 3 枚、同一隊不可重複，OX 合計 ≤ 15,000（メタ幣算 M 值）。再猜拳選陣營、擲金幣定先攻。",
+            "【賽前】先組隊：一定要 3 枚、同一隊不可重複，OX 合計 ≤ 15,000（雙值幣算 M 值）。再猜拳選陣營、擲金幣定先攻。",
             "【擊球】① 選金幣確定　② 滑鼠／←→ 決定方向（H 開關輔助線，關閉時用大三角箭頭）　③ 力量條　④ 精準度條",
             "　　　　精準度：中間綠區＝PERFECT 不偏；一離開就至少偏 5°，越靠邊越大，最邊緣左右各偏 70° 並帶弧線。",
             "【旋轉】出手前 Z 左旋／X 右旋（各 3 段）：金幣會轉、走弧線，撞到對手會傳遞旋轉並帶偏，撞邊框反彈角度改變；越強 PERFECT 綠區越窄。",
-            "【翻轉】開關方向與正對面是リバースポット（紅色弧線）。力道夠強打中 → 彈起，落地正反面各 1/2。",
-            "【防守方】彈起翻成對方顏色 → OUT；彈起仍是自己顏色 → OX 對決，守 ≥ 攻 セーフ（平手守方勝），由主人放回撞擊前的位置（只能轉方向、不能移動）。",
+            "【翻轉】開關方向與正對面是弱點（紅色弧線）。力道夠強打中 → 彈起，落地正反面各 1/2。",
+            "【防守方】彈起翻成對方顏色 → OUT；彈起仍是自己顏色 → OX 對決，守 ≥ 攻 安全（平手守方勝），由主人放回撞擊前的位置（只能轉方向、不能移動）。",
             "　　　　　被撞出界但仍在裝填狀態 → Safe，由主人放回場內任何位置（離其他金幣 ≥ 1 枚，方向自由 Q／E）。",
             "【同時解除】攻擊方和對手一起彈起：都變色或都沒變色 → 雙方 Safe；只有一方變色 → 那一方 OUT（香港大賽規則）。",
-            "【メタ幣】被打到彈起時中央核心會翻面，OX 對決用翻面後的數值（例：レオウ白 8000 → 黑面 4000）。",
+            "【雙值幣】被打到彈起時中央核心會翻面，OX 對決用翻面後的數值（例：烈焰獅王白 8000 → 黑面 4000）。",
             "【自滅】自己回合自己的金幣出界（含被自己撞出去的隊友）→ OUT；自爆翻成對方顏色 → OUT。",
-            "　　　　自爆仍是自己顏色 → セーフ，放回撞擊前的位置。沒撞到任何金幣 → 無效攻擊。",
+            "　　　　自爆仍是自己顏色 → 安全，放回撞擊前的位置。沒撞到任何金幣 → 無效攻擊。",
             "【模式】專業 3V3（8 分鐘）／標準 1V1（5 分鐘、有 OX）／簡易 1V1（5 分鐘、不比 OX）；出界開關關閉時撞框一律反彈。",
-            "【場地】A2 場地 420×594 mm（官方 A3 バリ場等比例放大）（上 ORDER 白／下 XTREME 黑），金幣直徑 43 mm。",
+            "【場地】A2 場地 420×594 mm（A3 場地等比例放大）（上 ORDER 白／下 XTREME 黑），金幣直徑 43 mm。",
             "【邊框】撞球檯式：垂直撞擊 ≥ 出界門檻（517，必定大於翻轉門檻 322）才飛出界，否則減速反彈；弱點撞牆 ≥ 322 也會彈起。",
             "【勝利】淘汰對手全部金幣。（程式開頭 OFFICIAL_RULES = False 可改回 isn_ver.1 自訂規則）",
         ]
@@ -1772,7 +1772,7 @@ class Game:
     def draw_build(self):
         s = self.screen
         pl = self.players[self.build_idx]
-        text(s, f"{pl.name} 組隊｜一定要選 3 枚、不可重複，OX 合計 ≤ 15,000（メタ幣算 M 值；陣營之後猜拳決定）", (40, 24), 26, COL["yel"],
+        text(s, f"{pl.name} 組隊｜一定要選 3 枚、不可重複，OX 合計 ≤ 15,000（雙值幣算 M 值；陣營之後猜拳決定）", (40, 24), 26, COL["yel"],
              bold=True)
         # 搜尋框
         box = pygame.Rect(40, 122, 300, 34)
@@ -1811,7 +1811,7 @@ class Game:
             self.row_rects.append((r, c))
         if not lst:
             text(s, "沒有符合的金幣，請放寬搜尋或分數範圍。", (60, rows_y + 20), 18, COL["dim"])
-        text(s, f"符合 {len(lst)} / {len(COINS)} 枚｜分數＝組隊計分（メタ幣算 M 值）｜滾輪捲動｜點一下加入／移除",
+        text(s, f"符合 {len(lst)} / {len(COINS)} 枚｜分數＝組隊計分（雙值幣算 M 值）｜滾輪捲動｜點一下加入／移除",
              (40, area.bottom + 8), 15, COL["dim"])
         # 選到的金幣：正反面預覽（清單下方，不遮畫面）
         pc = BY_ID.get(getattr(self, "peek", None))
